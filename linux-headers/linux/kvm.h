@@ -1053,6 +1053,7 @@ struct kvm_ppc_resize_hpt {
 #define KVM_CAP_X86_USER_SPACE_MSR 188
 #define KVM_CAP_X86_MSR_FILTER 189
 #define KVM_CAP_ENFORCE_PV_FEATURE_CPUID 190
+#define KVM_CAP_ARM_SDEI 193
 
 #ifdef KVM_CAP_IRQ_ROUTING
 
@@ -1556,6 +1557,9 @@ struct kvm_pv_cmd {
 
 /* Available with KVM_CAP_X86_MSR_FILTER */
 #define KVM_X86_SET_MSR_FILTER	_IOW(KVMIO,  0xc6, struct kvm_msr_filter)
+
+/* Available with KVM_CAP_ARM_SDEI */
+#define KVM_ARM_SDEI_COMMAND	_IOWR(KVMIO, 0xc8, struct kvm_sdei_cmd)
 
 /* Secure Encrypted Virtualization command */
 enum sev_cmd_id {
