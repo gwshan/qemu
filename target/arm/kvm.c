@@ -223,6 +223,16 @@ void kvm_arm_add_vcpu_properties(Object *obj)
                              kvm_steal_time_set);
     object_property_set_description(obj, "kvm-steal-time",
                                     "Set off to disable KVM steal time.");
+
+    if (kvm_arm_async_pf_supported()) {
+        object_property_add_uint32_ptr(obj, "kvm-async-pf-irq",
+                                       &env->apf.irq,
+                                       OBJ_PROP_FLAG_WRITE);
+        object_property_set_description(obj, "kvm-async-pf-irq",
+                                        "Set interrupt number to deliver "
+                                        "notification for asynchronous page "
+                                        "page.");
+   }
 }
 
 bool kvm_arm_pmu_supported(void)
