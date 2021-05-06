@@ -1056,6 +1056,7 @@ struct kvm_ppc_resize_hpt {
 #define KVM_CAP_ENFORCE_PV_FEATURE_CPUID 190
 #define KVM_CAP_SYS_HYPERV_CPUID 191
 #define KVM_CAP_DIRTY_LOG_RING 192
+#define KVM_CAP_ARM_SDEI 199
 
 #ifdef KVM_CAP_IRQ_ROUTING
 
@@ -1562,6 +1563,9 @@ struct kvm_pv_cmd {
 
 /* Available with KVM_CAP_DIRTY_LOG_RING */
 #define KVM_RESET_DIRTY_RINGS		_IO(KVMIO, 0xc7)
+
+/* Available with KVM_CAP_ARM_SDEI */
+#define KVM_ARM_SDEI_COMMAND	_IOWR(KVMIO, 0xcc, struct kvm_sdei_cmd)
 
 /* Secure Encrypted Virtualization command */
 enum sev_cmd_id {
