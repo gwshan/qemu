@@ -51,6 +51,7 @@
 #define ARCH_TIMER_NS_EL2_IRQ 10
 
 #define VIRTUAL_PMU_IRQ 7
+#define ARCH_ASYNC_PF_IRQ 6
 
 #define PPI(irq) ((irq) + 16)
 

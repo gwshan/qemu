@@ -293,6 +293,14 @@ bool kvm_arm_steal_time_supported(void);
 bool kvm_arm_sdei_supported(void);
 
 /**
+ * kvm_arm_async_pf_supported:
+ *
+ * Returns true if KVM can support asynchronous page fault
+ * and false otherwise.
+ */
+bool kvm_arm_async_pf_supported(void);
+
+/**
  * kvm_arm_aarch32_supported:
  *
  * Returns: true if KVM can enable AArch32 mode
@@ -406,6 +414,11 @@ static inline bool kvm_arm_steal_time_supported(void)
 }
 
 static inline bool kvm_arm_sdei_supported(void)
+{
+    return false;
+}
+
+static inline bool kvm_arm_async_pf_supported(void)
 {
     return false;
 }
