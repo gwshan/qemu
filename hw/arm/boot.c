@@ -531,7 +531,7 @@ int arm_load_dtb(hwaddr addr, const struct arm_boot_info *binfo,
     int size, rc, n = 0;
     uint32_t acells, scells;
     unsigned int i;
-    hwaddr mem_base, mem_len;
+    hwaddr mem_base, mem_end, base, mem_len;
     char **node_path;
     Error *err = NULL;
 
@@ -599,11 +599,27 @@ int arm_load_dtb(hwaddr addr, const struct arm_boot_info *binfo,
     }
     g_strfreev(node_path);
 
+    /*
+     * It's possible to have multiple empty NUMA nodes. The dummy
+     * base address, starting at end of valid memory space, will
+     * be given. Otherwise, the device tree can't be populated
+     * successfully because of the conflicting memory node names.
+     */
     if (ms->numa_state != NULL && ms->numa_state->num_nodes > 0) {
         mem_base = binfo->loader_start;
+        mem_end = mem_base;
         for (i = 0; i < ms->numa_state->num_nodes; i++) {
+             mem_end += ms->numa_state->nodes[i].node_mem;
+        }
+
+        for (i = 0; i < ms->numa_state->num_nodes; i++) {
+            base = mem_base;
             mem_len = ms->numa_state->nodes[i].node_mem;
-            rc = fdt_add_memory_node(fdt, acells, mem_base,
+            if (!mem_len) {
+                base = (mem_end + i);
+            }
+
+            rc = fdt_add_memory_node(fdt, acells, base,
                                      scells, mem_len, i);
             if (rc < 0) {
                 fprintf(stderr, "couldn't add /memory@%"PRIx64" node\n",
