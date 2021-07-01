@@ -574,11 +574,15 @@ bool write_list_to_kvmstate(ARMCPU *cpu, int level)
         }
         ret = kvm_vcpu_ioctl(cs, KVM_SET_ONE_REG, &r);
         if (ret) {
+            fprintf(stdout, "%s: error=%d, id=%016lx, addr=%016lx, val=%016lx\n",
+                    __func__, ret, (unsigned long)(r.id),
+                    (unsigned long)(r.addr), *(unsigned long*)(r.addr));
+
             /* We might fail for "unknown register" and also for
              * "you tried to set a register which is constant with
              * a different value from what it actually contains".
              */
-            ok = false;
+            //ok = false;
         }
     }
     return ok;

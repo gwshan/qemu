@@ -755,6 +755,10 @@ static int cpu_post_load(void *opaque, int version_id)
         }
         if (cpu->cpreg_vmstate_indexes[v] < cpu->cpreg_indexes[i]) {
             /* register in their list but not ours: fail migration */
+            fprintf(stdout, "%s: v=%d (%016lx  %d), i=%d (%016lx  %d)\n",
+                    __func__, v, (unsigned long)(cpu->cpreg_vmstate_indexes[v]),
+		    cpu->cpreg_vmstate_array_len,
+		    i, (unsigned long)(cpu->cpreg_indexes[i]), cpu->cpreg_array_len);
             return -1;
         }
         /* matching register, copy the value over */
@@ -764,6 +768,7 @@ static int cpu_post_load(void *opaque, int version_id)
 
     if (kvm_enabled()) {
         if (!write_list_to_kvmstate(cpu, KVM_PUT_FULL_STATE)) {
+            fprintf(stdout, "%s: error from write_list_to_kvmstate()\n", __func__);
             return -1;
         }
         /* Note that it's OK for the TCG side not to know about
