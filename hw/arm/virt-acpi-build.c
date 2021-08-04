@@ -475,6 +475,18 @@ build_spcr(GArray *table_data, BIOSLinker *linker, VirtMachineState *vms)
 }
 
 static void
+build_sdei(GArray *table_data, BIOSLinker *linker, VirtMachineState *vms)
+{
+    AcpiTableHeader *sdei;
+    int sdei_start = table_data->len;
+
+    sdei = acpi_data_push(table_data, sizeof(*sdei));
+    build_header(linker, table_data, (void *)(table_data->data + sdei_start),
+                 "SDEI", table_data->len - sdei_start, 1, vms->oem_id,
+                 vms->oem_table_id);
+}
+
+static void
 build_srat(GArray *table_data, BIOSLinker *linker, VirtMachineState *vms)
 {
     AcpiSystemResourceAffinityTable *srat;
@@ -812,6 +824,11 @@ void virt_acpi_build(VirtMachineState *vms, AcpiBuildTables *tables)
 
     acpi_add_table(table_offsets, tables_blob);
     build_spcr(tables_blob, tables->linker, vms);
+
+    if (kvm_arm_sdei_supported()) {
+        acpi_add_table(table_offsets, tables_blob);
+        build_sdei(tables_blob, tables->linker, vms);
+    }
 
     if (vms->ras) {
         build_ghes_error_table(tables->hardware_errors, tables->linker);
