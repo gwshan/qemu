@@ -231,6 +231,13 @@ typedef struct CPUARMTBFlags {
     target_ulong flags2;
 } CPUARMTBFlags;
 
+#if defined(CONFIG_KVM) && defined(TARGET_AARCH64)
+typedef struct kvm_sdei_kvm_event_state KVMSdeiKvmEventState;
+typedef struct kvm_sdei_vcpu_event_state KVMSdeiVcpuEventState;
+typedef struct kvm_sdei_vcpu_state KVMSdeiVcpuState;
+typedef struct kvm_sdei_cmd KVMSdeiCmd;
+#endif
+
 typedef struct CPUARMState {
     /* Regs for current mode.  */
     uint32_t regs[16];
@@ -676,6 +683,17 @@ typedef struct CPUARMState {
         ARMPACKey apdb;
         ARMPACKey apga;
     } keys;
+#endif
+
+#if defined(CONFIG_KVM) && defined(TARGET_AARCH64)
+    struct {
+        int32_t               kske_num;
+        int32_t               ksve_num;
+        int32_t               ksv_num;
+        KVMSdeiKvmEventState  *kske;
+        KVMSdeiVcpuEventState *ksve;
+        KVMSdeiVcpuState      *ksv;
+    } sdei;
 #endif
 
 #if defined(CONFIG_USER_ONLY)

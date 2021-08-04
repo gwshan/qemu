@@ -650,6 +650,373 @@ static const VMStateInfo vmstate_powered_off = {
     .put = put_power,
 };
 
+#if defined(CONFIG_KVM) && defined(TARGET_AARCH64)
+
+#define SDEI_DEBUG(...) fprintf(stdout, __VA_ARGS__)
+
+static bool sdei_needed(void *opaque)
+{
+    ARMCPU*cpu = opaque;
+    CPUState *cs = CPU(cpu);
+    KVMSdeiCmd *cmd = NULL;
+    bool needed = true;
+    int ret;
+
+    SDEI_DEBUG("%s (%d): enter\n", __func__, cs->cpu_index);
+
+    if (!(kvm_enabled() && kvm_arm_sdei_supported())) {
+        SDEI_DEBUG("   not supported\n");
+        return false;
+    }
+
+    /* v1.0.0 is the minimal required version */
+    cmd = g_new(KVMSdeiCmd, 1);
+    cmd->cmd = KVM_SDEI_CMD_GET_VERSION;
+    ret = kvm_vm_ioctl(kvm_state, KVM_ARM_SDEI_COMMAND, cmd);
+    if (ret || cmd->version < 0x10000) {
+        SDEI_DEBUG("   ioctl error (%d, 0x%08x)\n", ret, cmd->version);
+        needed = false;
+    }
+
+    g_free(cmd);
+    return needed;
+}
+
+static bool sdei_pre_save_kevent(ARMCPU *cpu, KVMSdeiCmd *cmd)
+{
+    CPUState *cs = CPU(cpu);
+    CPUARMState *env = &cpu->env;
+    bool success = true;
+    int index, ret;
+
+    if (cs->cpu_index != 0) {
+        return true;
+    }
+
+    SDEI_DEBUG("%s (%d): enter\n", __func__, cs->cpu_index);
+
+    env->sdei.kske_num = 0;
+    g_free(env->sdei.kske);
+
+    /* Retrieve number of KVM events */
+    cmd->cmd = KVM_SDEI_CMD_GET_KEVENT_COUNT;
+    ret = kvm_vm_ioctl(kvm_state, KVM_ARM_SDEI_COMMAND, cmd);
+    if (ret) {
+        SDEI_DEBUG("   count ioctl error (%d)\n", ret);
+        return false;
+    }
+
+    if (cmd->count <= 0) {
+        SDEI_DEBUG("   invalid count (%d)\n", cmd->count);
+        return true;
+    }
+
+    /* Retrieve the KVM events */
+    env->sdei.kske_num = cmd->count;
+    env->sdei.kske = g_new(KVMSdeiKvmEventState, env->sdei.kske_num);
+    cmd->cmd = KVM_SDEI_CMD_GET_KEVENT;
+    cmd->kske_state.num = KVM_SDEI_INVALID_NUM;
+
+    for (index = 0; index < env->sdei.kske_num; index++) {
+        ret = kvm_vm_ioctl(kvm_state, KVM_ARM_SDEI_COMMAND, cmd);
+        if (ret) {
+            SDEI_DEBUG("   ioctl error (%d)\n", ret);
+            env->sdei.kske_num = index;
+            success = false;
+            break;
+        }
+
+        env->sdei.kske[index] = cmd->kske_state;
+    }
+
+    return success;
+}
+
+static bool sdei_pre_save_vevent(ARMCPU *cpu, KVMSdeiCmd *cmd)
+{
+    CPUState *cs = CPU(cpu);
+    CPUARMState *env = &cpu->env;
+    bool success = true;
+    int index, ret;
+
+    SDEI_DEBUG("%s (%d): enter\n", __func__, cs->cpu_index);
+
+    env->sdei.ksve_num = 0;
+    g_free(env->sdei.ksve);
+
+    /* Retrieve number of vCPU events */
+    cmd->cmd = KVM_SDEI_CMD_GET_VEVENT_COUNT;
+    ret = kvm_vcpu_ioctl(cs, KVM_ARM_SDEI_COMMAND, cmd);
+    if (ret) {
+        SDEI_DEBUG("   count ioctl error (%d)\n", ret);
+        return false;
+    }
+
+    if (cmd->count <= 0) {
+        SDEI_DEBUG("   invalid count (%d)\n", cmd->count);
+        return true;
+    }
+
+    /* Retrieve vCPU events */
+    env->sdei.ksve_num = cmd->count;
+    env->sdei.ksve = g_new(KVMSdeiVcpuEventState, env->sdei.ksve_num);
+    cmd->cmd = KVM_SDEI_CMD_GET_VEVENT;
+    cmd->ksve_state.num = KVM_SDEI_INVALID_NUM;
+
+    for (index = 0; index < env->sdei.ksve_num; index++) {
+        ret = kvm_vcpu_ioctl(cs, KVM_ARM_SDEI_COMMAND, cmd);
+        if (ret) {
+            SDEI_DEBUG("   ioctl error (%d)\n", ret);
+            env->sdei.ksve_num = index;
+            success = false;
+            break;
+        }
+
+        env->sdei.ksve[index] = cmd->ksve_state;
+    }
+
+    return success;
+}
+
+static bool sdei_pre_save_vcpu_state(ARMCPU *cpu, KVMSdeiCmd *cmd)
+{
+    CPUState *cs = CPU(cpu);
+    CPUARMState *env = &cpu->env;
+    bool success = true;
+    int index, ret;
+
+    SDEI_DEBUG("%s (%d): enter\n", __func__, cs->cpu_index);
+
+    env->sdei.ksv_num = 0;
+    g_free(env->sdei.ksv);
+
+    /* Retrieve vCPU state and we have only one */
+    env->sdei.ksv_num = 1;
+    env->sdei.ksv = g_new(KVMSdeiVcpuState, env->sdei.ksv_num);
+    cmd->cmd = KVM_SDEI_CMD_GET_VCPU_STATE;
+
+    for (index = 0; index < env->sdei.ksv_num; index++) {
+        ret = kvm_vcpu_ioctl(cs, KVM_ARM_SDEI_COMMAND, cmd);
+        if (ret) {
+            SDEI_DEBUG("   ioctl error (%d)\n", ret);
+            env->sdei.ksv_num = index;
+            success = false;
+            break;
+        }
+
+        env->sdei.ksv[index] = cmd->ksv_state;
+    }
+
+    return success;
+}
+
+static int sdei_pre_save(void *opaque)
+{
+    ARMCPU *cpu = opaque;
+    KVMSdeiCmd *cmd = g_new(KVMSdeiCmd, 1);
+
+    if (!sdei_pre_save_kevent(cpu, cmd)) {
+        goto out;
+    }
+
+    if (!sdei_pre_save_vevent(cpu, cmd)) {
+        goto out;
+    }
+
+    sdei_pre_save_vcpu_state(cpu, cmd);
+
+out:
+    g_free(cmd);
+    return 0;
+}
+
+static bool sdei_post_load_kevent(ARMCPU *cpu, KVMSdeiCmd *cmd)
+{
+    CPUState *cs = CPU(cpu);
+    CPUARMState *env = &cpu->env;
+    bool success = true;
+    int index, ret;
+
+    if (cs->cpu_index != 0) {
+        return true;
+    }
+
+    SDEI_DEBUG("%s (%d): enter\n", __func__, cs->cpu_index);
+
+    if (env->sdei.kske_num <= 0) {
+        SDEI_DEBUG("   invalid count (%d)\n", env->sdei.kske_num);
+        return true;
+    }
+
+    for (index = 0; index < env->sdei.kske_num; index++) {
+        cmd->cmd = KVM_SDEI_CMD_SET_KEVENT;
+        cmd->kske_state = env->sdei.kske[index];
+        ret = kvm_vm_ioctl(kvm_state, KVM_ARM_SDEI_COMMAND, cmd);
+        if (ret) {
+            SDEI_DEBUG("   ioctl error (%d)\n", ret);
+            success = false;
+            break;
+        }
+    }
+
+    env->sdei.kske_num = 0;
+    g_free(env->sdei.kske);
+    return success;
+}
+
+static bool sdei_post_load_vevent(ARMCPU *cpu, KVMSdeiCmd *cmd)
+{
+    CPUState *cs = CPU(cpu);
+    CPUARMState *env = &cpu->env;
+    bool success = true;
+    int index, ret;
+
+    SDEI_DEBUG("%s (%d): enter\n", __func__, cs->cpu_index);
+
+    if (env->sdei.ksve_num <= 0) {
+        SDEI_DEBUG("   invalid count (%d)\n", env->sdei.ksve_num);
+        return true;
+    }
+
+    for (index = 0; index < env->sdei.ksve_num; index++) {
+        cmd->cmd = KVM_SDEI_CMD_SET_VEVENT;
+        cmd->ksve_state = env->sdei.ksve[index];
+        ret = kvm_vcpu_ioctl(cs, KVM_ARM_SDEI_COMMAND, cmd);
+        if (ret) {
+            SDEI_DEBUG("   ioctl error (%d)\n", ret);
+            success = false;
+            break;
+        }
+    }
+
+    env->sdei.ksve_num = 0;
+    g_free(env->sdei.ksve);
+    return success;
+}
+
+static bool sdei_post_load_vcpu_state(ARMCPU *cpu, KVMSdeiCmd *cmd)
+{
+    CPUState *cs = CPU(cpu);
+    CPUARMState *env = &cpu->env;
+    bool success = true;
+    int index, ret;
+
+    SDEI_DEBUG("%s (%d): enter\n", __func__, cs->cpu_index);
+
+    if (env->sdei.ksv_num <= 0) {
+        SDEI_DEBUG("   invalid count (%d)\n", env->sdei.ksv_num);
+        return true;
+    }
+
+    for (index = 0; index < env->sdei.ksv_num; index++) {
+        cmd->cmd = KVM_SDEI_CMD_SET_VCPU_STATE;
+        cmd->ksv_state = env->sdei.ksv[index];
+        ret = kvm_vcpu_ioctl(cs, KVM_ARM_SDEI_COMMAND, cmd);
+        if (ret) {
+            SDEI_DEBUG("   ioctl error (%d)\n", ret);
+            success = false;
+            break;
+        }
+    }
+
+    env->sdei.ksv_num = 0;
+    g_free(env->sdei.ksv);
+    return success;
+}
+
+static int sdei_post_load(void *opaque, int version_id)
+{
+    ARMCPU *cpu = opaque;
+    KVMSdeiCmd *cmd = g_new(KVMSdeiCmd, 1);
+
+    if (!sdei_post_load_kevent(cpu, cmd)) {
+        goto out;
+    }
+
+    if (!sdei_post_load_vevent(cpu, cmd)) {
+        goto out;
+    }
+
+    sdei_post_load_vcpu_state(cpu, cmd);
+
+out:
+    g_free(cmd);
+    return 0;
+}
+
+static const VMStateDescription vmstate_sdei_kske = {
+    .name = "cpu/sdei/kske",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]) {
+        VMSTATE_U64(num, KVMSdeiKvmEventState),
+        VMSTATE_U32(refcount, KVMSdeiKvmEventState),
+        VMSTATE_U8(route_mode, KVMSdeiKvmEventState),
+        VMSTATE_U64(route_affinity, KVMSdeiKvmEventState),
+        VMSTATE_U64_ARRAY(entries, KVMSdeiKvmEventState, KVM_SDEI_MAX_VCPUS),
+        VMSTATE_U64_ARRAY(params, KVMSdeiKvmEventState, KVM_SDEI_MAX_VCPUS),
+        VMSTATE_U64_ARRAY(registered, KVMSdeiKvmEventState,
+                          KVM_SDEI_MAX_VCPUS / 64),
+        VMSTATE_U64_ARRAY(enabled, KVMSdeiKvmEventState,
+                          KVM_SDEI_MAX_VCPUS / 64),
+        VMSTATE_END_OF_LIST()
+    },
+};
+
+static const VMStateDescription vmstate_sdei_ksve = {
+    .name = "cpu/sdei/ksve",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]) {
+        VMSTATE_U64(num, KVMSdeiVcpuEventState),
+        VMSTATE_U32(refcount, KVMSdeiVcpuEventState),
+        VMSTATE_END_OF_LIST()
+    },
+};
+
+static const VMStateDescription vmstate_sdei_ksv = {
+    .name = "cpu/sdei/ksv",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]) {
+        VMSTATE_U8(masked, KVMSdeiVcpuState),
+        VMSTATE_U64(critical_num, KVMSdeiVcpuState),
+        VMSTATE_U64(normal_num, KVMSdeiVcpuState),
+        VMSTATE_U64_ARRAY(critical_regs.regs, KVMSdeiVcpuState, 18),
+        VMSTATE_U64(critical_regs.pc, KVMSdeiVcpuState),
+        VMSTATE_U64(critical_regs.pstate, KVMSdeiVcpuState),
+        VMSTATE_U64_ARRAY(normal_regs.regs, KVMSdeiVcpuState, 18),
+        VMSTATE_U64(normal_regs.pc, KVMSdeiVcpuState),
+        VMSTATE_U64(normal_regs.pstate, KVMSdeiVcpuState),
+        VMSTATE_END_OF_LIST()
+    },
+};
+
+static const VMStateDescription vmstate_sdei = {
+    .name = "cpu/sdei",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .needed = sdei_needed,
+    .pre_save = sdei_pre_save,
+    .post_load = sdei_post_load,
+    .fields = (VMStateField[]) {
+        VMSTATE_INT32(env.sdei.kske_num, ARMCPU),
+        VMSTATE_INT32(env.sdei.ksve_num, ARMCPU),
+        VMSTATE_INT32(env.sdei.ksv_num,  ARMCPU),
+        VMSTATE_STRUCT_VARRAY_ALLOC(env.sdei.kske, ARMCPU, env.sdei.kske_num,
+                                    0, vmstate_sdei_kske,
+                                    KVMSdeiKvmEventState),
+        VMSTATE_STRUCT_VARRAY_ALLOC(env.sdei.ksve, ARMCPU, env.sdei.ksve_num,
+                                    0, vmstate_sdei_ksve,
+                                    KVMSdeiVcpuEventState),
+        VMSTATE_STRUCT_VARRAY_ALLOC(env.sdei.ksv, ARMCPU, env.sdei.ksv_num,
+                                    0, vmstate_sdei_ksv,
+                                    KVMSdeiVcpuState),
+        VMSTATE_END_OF_LIST()
+    },
+};
+#endif
+
 static int cpu_pre_save(void *opaque)
 {
     ARMCPU *cpu = opaque;
@@ -864,6 +1231,9 @@ const VMStateDescription vmstate_arm_cpu = {
 #endif
         &vmstate_serror,
         &vmstate_irq_line_state,
+#if defined(CONFIG_KVM) && defined(TARGET_AARCH64)
+        &vmstate_sdei,
+#endif
         NULL
     }
 };
