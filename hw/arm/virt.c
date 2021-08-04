@@ -1974,6 +1974,11 @@ static void machvirt_init(MachineState *machine)
             object_property_set_bool(cpuobj, "kvm-steal-time", false, NULL);
         }
 
+        if (object_property_find(cpuobj, "kvm-async-pf-irq")) {
+            object_property_set_uint(cpuobj, "kvm-async-pf-irq",
+                                     PPI(ARCH_ASYNC_PF_IRQ), NULL);
+        }
+
         if (vmc->no_pmu && object_property_find(cpuobj, "pmu")) {
             object_property_set_bool(cpuobj, "pmu", false, NULL);
         }

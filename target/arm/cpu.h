@@ -694,6 +694,12 @@ typedef struct CPUARMState {
         KVMSdeiVcpuEventState *ksve;
         KVMSdeiVcpuState      *ksv;
     } sdei;
+
+    struct {
+        uint64_t sdei;
+        uint32_t irq;
+        uint64_t control;
+    } apf;
 #endif
 
 #if defined(CONFIG_USER_ONLY)

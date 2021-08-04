@@ -735,6 +735,13 @@ bool kvm_arm_sdei_supported(void)
     return kvm_check_extension(kvm_state, KVM_CAP_ARM_SDEI);
 }
 
+bool kvm_arm_async_pf_supported(void)
+{
+    return (kvm_arm_sdei_supported() &&
+            kvm_check_extension(kvm_state, KVM_CAP_ASYNC_PF) &&
+            kvm_check_extension(kvm_state, KVM_CAP_ASYNC_PF_INT));
+}
+
 QEMU_BUILD_BUG_ON(KVM_ARM64_SVE_VQ_MIN != 1);
 
 void kvm_arm_sve_get_vls(CPUState *cs, unsigned long *map)
@@ -829,6 +836,43 @@ static int kvm_arm_sve_set_vls(CPUState *cs)
     return kvm_vcpu_ioctl(cs, KVM_SET_ONE_REG, &reg);
 }
 
+static void kvm_arm_init_async_pf(CPUState *cs)
+{
+    ARMCPU *cpu = ARM_CPU(cs);
+    CPUARMState *env = &cpu->env;
+    struct kvm_arm_async_pf_cmd cmd;
+    int ret;
+
+    if (!kvm_arm_async_pf_supported() || !env->apf.irq) {
+        return;
+    }
+
+    /* Minimal version is v1.0.0 */
+    cmd.cmd = KVM_ARM_ASYNC_PF_CMD_GET_VERSION;
+    ret = kvm_vm_ioctl(kvm_state, KVM_ARM_ASYNC_PF_COMMAND, &cmd);
+    if (ret || cmd.version < 0x10000) {
+        return;
+    }
+
+    /*
+     * The SDEI event number is standardized, while the IRQ number
+     * is configured by platform.
+     */
+    env->apf.sdei = KVM_SDEI_ASYNC_PF_NUM;
+    cmd.cmd = KVM_ARM_ASYNC_PF_CMD_SET_SDEI;
+    cmd.sdei = env->apf.sdei;
+    ret = kvm_vcpu_ioctl(cs, KVM_ARM_ASYNC_PF_COMMAND, &cmd);
+    if (ret) {
+        return;
+    }
+
+    if (env->apf.irq) {
+        cmd.cmd = KVM_ARM_ASYNC_PF_CMD_SET_IRQ;
+        cmd.irq = env->apf.irq;
+        kvm_vcpu_ioctl(cs, KVM_ARM_ASYNC_PF_COMMAND, &cmd);
+    }
+}
+
 #define ARM_CPU_ID_MPIDR       3, 0, 0, 0, 5
 
 int kvm_arch_init_vcpu(CPUState *cs)
@@ -903,6 +947,8 @@ int kvm_arch_init_vcpu(CPUState *cs)
 
     /* Check whether user space can specify guest syndrome value */
     kvm_arm_init_serror_injection(cs);
+
+    kvm_arm_init_async_pf(cs);
 
     return kvm_arm_init_cpreg_list(cpu);
 }
