@@ -1015,6 +1015,130 @@ static const VMStateDescription vmstate_sdei = {
         VMSTATE_END_OF_LIST()
     },
 };
+
+#define ASYNC_PF_DEBUG(...) fprintf(stdout, __VA_ARGS__)
+
+static bool async_pf_needed(void *opaque)
+{
+    ARMCPU *cpu = opaque;
+    CPUState *cs = CPU(cpu);
+    struct kvm_arm_async_pf_cmd cmd;
+    int ret;
+
+    ASYNC_PF_DEBUG("%s (%d): enter\n", __func__, cs->cpu_index);
+
+    if (!(kvm_enabled() && kvm_arm_async_pf_supported())) {
+        ASYNC_PF_DEBUG("   not supported\n");
+        return false;
+    }
+
+    cmd.cmd = KVM_ARM_ASYNC_PF_CMD_GET_VERSION;
+    ret = kvm_vm_ioctl(kvm_state, KVM_ARM_ASYNC_PF_COMMAND, &cmd);
+    if (ret || cmd.version < 0x10000) {
+        ASYNC_PF_DEBUG("   ioctl error (%d, 0x%08x)\n", ret, cmd.version);
+        return false;
+    }
+
+    return true;
+}
+
+static int async_pf_pre_save(void *opaque)
+{
+    ARMCPU *cpu = opaque;
+    CPUState *cs = CPU(cpu);
+    CPUARMState *env = &cpu->env;
+    struct kvm_arm_async_pf_cmd cmd;
+    int ret;
+
+    ASYNC_PF_DEBUG("%s (%d): enter\n", __func__, cs->cpu_index);
+
+    cmd.cmd = KVM_ARM_ASYNC_PF_CMD_GET_SDEI;
+    ret = kvm_vcpu_ioctl(cs, KVM_ARM_ASYNC_PF_COMMAND, &cmd);
+    if (ret) {
+        ASYNC_PF_DEBUG("   GET_SDEI ioctl error (%d)\n", ret);
+        return 0;
+    }
+
+    env->apf.sdei = cmd.sdei;
+    cmd.cmd = KVM_ARM_ASYNC_PF_CMD_GET_IRQ;
+    ret = kvm_vcpu_ioctl(cs, KVM_ARM_ASYNC_PF_COMMAND, &cmd);
+    if (ret) {
+        ASYNC_PF_DEBUG("   GET_IRQ ioctl error (%d)\n", ret);
+        return 0;
+    }
+
+    env->apf.irq = cmd.irq;
+    cmd.cmd = KVM_ARM_ASYNC_PF_CMD_GET_CONTROL;
+    ret = kvm_vcpu_ioctl(cs, KVM_ARM_ASYNC_PF_COMMAND, &cmd);
+    if (ret) {
+        ASYNC_PF_DEBUG("   GET_CONTROL ioctl error (%d)\n", ret);
+        return 0;
+    }
+
+    env->apf.control = cmd.control;
+
+    return 0;
+}
+
+static int async_pf_post_load(void *opaque, int version_id)
+{
+    ARMCPU *cpu = opaque;
+    CPUState *cs = CPU(cpu);
+    CPUARMState *env = &cpu->env;
+    struct kvm_arm_async_pf_cmd cmd;
+    int ret;
+
+    ASYNC_PF_DEBUG("%s (%d): enter (%016lx-%08x-%016lx)\n",
+                   __func__, cs->cpu_index, env->apf.sdei,
+                   env->apf.irq, env->apf.control);
+
+    if (env->apf.sdei) {
+        cmd.cmd = KVM_ARM_ASYNC_PF_CMD_SET_SDEI;
+        cmd.sdei = env->apf.sdei;
+        ret = kvm_vcpu_ioctl(cs, KVM_ARM_ASYNC_PF_COMMAND, &cmd);
+        if (ret) {
+            ASYNC_PF_DEBUG("   SET_SDEI ioctl error (%d)\n", ret);
+            return 0;
+        }
+    }
+
+    if (env->apf.irq) {
+        cmd.cmd = KVM_ARM_ASYNC_PF_CMD_SET_IRQ;
+        cmd.irq = env->apf.irq;
+        ret = kvm_vcpu_ioctl(cs, KVM_ARM_ASYNC_PF_COMMAND, &cmd);
+        if (ret) {
+            ASYNC_PF_DEBUG("   SET_IRQ ioctl_error (%d)\n", ret);
+            return 0;
+        }
+    }
+
+    if (env->apf.control) {
+        cmd.cmd = KVM_ARM_ASYNC_PF_CMD_SET_CONTROL;
+        cmd.control = env->apf.control;
+        ret = kvm_vcpu_ioctl(cs, KVM_ARM_ASYNC_PF_COMMAND, &cmd);
+        if (ret) {
+            ASYNC_PF_DEBUG("   SET_CONTROL ioctl error (%d)\n", ret);
+            return 0;
+        }
+    }
+
+    return 0;
+}
+
+static const VMStateDescription vmstate_async_pf = {
+    .name = "cpu/async_pf",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .needed = async_pf_needed,
+    .pre_save = async_pf_pre_save,
+    .post_load = async_pf_post_load,
+    .fields = (VMStateField[]) {
+        VMSTATE_UINT64(env.apf.sdei, ARMCPU),
+        VMSTATE_UINT32(env.apf.irq,  ARMCPU),
+        VMSTATE_UINT64(env.apf.control, ARMCPU),
+        VMSTATE_END_OF_LIST()
+    },
+};
 #endif
 
 static int cpu_pre_save(void *opaque)
@@ -1233,6 +1357,7 @@ const VMStateDescription vmstate_arm_cpu = {
         &vmstate_irq_line_state,
 #if defined(CONFIG_KVM) && defined(TARGET_AARCH64)
         &vmstate_sdei,
+        &vmstate_async_pf,
 #endif
         NULL
     }
