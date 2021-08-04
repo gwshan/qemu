@@ -1139,6 +1139,28 @@ extern const VMStateInfo vmstate_info_qlist;
 #define VMSTATE_BUFFER_UNSAFE(_field, _state, _version, _size)        \
     VMSTATE_BUFFER_UNSAFE_INFO(_field, _state, _version, vmstate_info_buffer, _size)
 
+#ifdef CONFIG_LINUX
+
+#define VMSTATE_U8_ARRAY_V(_f, _s, _n, _v)                     \
+    VMSTATE_ARRAY(_f, _s, _n, _v, vmstate_info_uint8, __u8)
+#define VMSTATE_U16_ARRAY_V(_f, _s, _n, _v)                    \
+    VMSTATE_ARRAY(_f, _s, _n, _v, vmstate_info_uint16, __u16)
+#define VMSTATE_U32_ARRAY_V(_f, _s, _n, _v)                    \
+    VMSTATE_ARRAY(_f, _s, _n, _v, vmstate_info_uint32, __u32)
+#define VMSTATE_U64_ARRAY_V(_f, _s, _n, _v)                    \
+    VMSTATE_ARRAY(_f, _s, _n, _v, vmstate_info_uint64, __u64)
+
+#define VMSTATE_U8_ARRAY(_f, _s, _n)                           \
+    VMSTATE_U8_ARRAY_V(_f, _s, _n, 0)
+#define VMSTATE_U16_ARRAY(_f, _s, _n)                          \
+    VMSTATE_U16_ARRAY_V(_f, _s, _n, 0)
+#define VMSTATE_U32_ARRAY(_f, _s, _n)                          \
+    VMSTATE_U32_ARRAY_V(_f, _s, _n, 0)
+#define VMSTATE_U64_ARRAY(_f, _s, _n)                          \
+    VMSTATE_U64_ARRAY_V(_f, _s, _n, 0)
+
+#endif
+
 /*
  * These VMSTATE_UNUSED*() macros can be used to fill in the holes
  * when some of the vmstate fields are obsolete to be compatible with
