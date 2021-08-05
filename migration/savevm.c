@@ -2283,6 +2283,7 @@ static int loadvm_process_command(QEMUFile *f)
         return -ERANGE;
     }
 
+    fprintf(stdout, "migration: Received command [%s]\n", mig_cmd_args[cmd].name);
     switch (cmd) {
     case MIG_CMD_OPEN_RETURN_PATH:
         if (mis->to_src_file) {
