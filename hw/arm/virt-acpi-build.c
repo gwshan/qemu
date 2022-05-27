@@ -627,6 +627,15 @@ build_gtdt(GArray *table_data, BIOSLinker *linker, VirtMachineState *vms)
     acpi_table_end(linker, &table);
 }
 
+static void
+build_sdei(GArray *table_data, BIOSLinker *linker, VirtMachineState *vms)
+{
+    AcpiTable table = { .sig = "SDEI", .rev = 0, .oem_id = vms->oem_id,
+                        .oem_table_id = vms->oem_table_id };
+    acpi_table_begin(&table, table_data);
+    acpi_table_end(linker, &table);
+}
+
 /* Debug Port Table 2 (DBG2) */
 static void
 build_dbg2(GArray *table_data, BIOSLinker *linker, VirtMachineState *vms)
@@ -971,6 +980,11 @@ void virt_acpi_build(VirtMachineState *vms, AcpiBuildTables *tables)
 
     acpi_add_table(table_offsets, tables_blob);
     build_spcr(tables_blob, tables->linker, vms);
+
+    if (kvm_arm_sdei_supported()) {
+        acpi_add_table(table_offsets, tables_blob);
+        build_sdei(tables_blob, tables->linker, vms);
+    }
 
     acpi_add_table(table_offsets, tables_blob);
     build_dbg2(tables_blob, tables->linker, vms);

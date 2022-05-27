@@ -284,6 +284,13 @@ void kvm_arm_steal_time_finalize(ARMCPU *cpu, Error **errp);
 bool kvm_arm_steal_time_supported(void);
 
 /**
+ * kvm_arm_sdei_supported:
+ *
+ * Returns true if KVM can support SDEI and false otherwise.
+ */
+bool kvm_arm_sdei_supported(void);
+
+/**
  * kvm_arm_aarch32_supported:
  *
  * Returns: true if KVM can enable AArch32 mode
@@ -392,6 +399,11 @@ static inline bool kvm_arm_sve_supported(void)
 }
 
 static inline bool kvm_arm_steal_time_supported(void)
+{
+    return false;
+}
+
+static inline bool kvm_arm_sdei_supported(void)
 {
     return false;
 }
