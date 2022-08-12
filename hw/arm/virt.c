@@ -1256,15 +1256,20 @@ static void create_virtio_devices(const VirtMachineState *vms)
 #define VIRT_FLASH_SECTOR_SIZE (256 * KiB)
 
 static PFlashCFI01 *virt_flash_create1(VirtMachineState *vms,
-                                        const char *name,
-                                        const char *alias_prop_name)
+                                       unsigned int index,
+                                       hwaddr base, hwaddr size,
+                                       MemoryRegion *sysmem)
 {
     /*
      * Create a single flash device.  We use the same parameters as
      * the flash devices on the Versatile Express board.
      */
     DeviceState *dev = qdev_new(TYPE_PFLASH_CFI01);
+    char *name = g_strdup_printf("virt.flash%u", index);
 
+    assert(QEMU_IS_ALIGNED(size, VIRT_FLASH_SECTOR_SIZE));
+    assert(size / VIRT_FLASH_SECTOR_SIZE <= UINT32_MAX);
+    qdev_prop_set_uint32(dev, "num-blocks", size / VIRT_FLASH_SECTOR_SIZE);
     qdev_prop_set_uint64(dev, "sector-length", VIRT_FLASH_SECTOR_SIZE);
     qdev_prop_set_uint8(dev, "width", 4);
     qdev_prop_set_uint8(dev, "device-width", 2);
@@ -1274,53 +1279,45 @@ static PFlashCFI01 *virt_flash_create1(VirtMachineState *vms,
     qdev_prop_set_uint16(dev, "id2", 0x00);
     qdev_prop_set_uint16(dev, "id3", 0x00);
     qdev_prop_set_string(dev, "name", name);
-    object_property_add_child(OBJECT(vms), name, OBJECT(dev));
-    object_property_add_alias(OBJECT(vms), alias_prop_name,
-                              OBJECT(dev), "drive");
-    return PFLASH_CFI01(dev);
-}
 
-static void virt_flash_create(VirtMachineState *vms)
-{
-    vms->flash[0] = virt_flash_create1(vms, "virt.flash0", "pflash0");
-    vms->flash[1] = virt_flash_create1(vms, "virt.flash1", "pflash1");
-}
+    assert(index < ARRAY_SIZE(vms->pflash));
+    if (vms->pflash[index]) {
+        object_property_set_str(OBJECT(dev), "drive", vms->pflash[index],
+                                &error_fatal);
+    }
 
-static void virt_flash_map1(PFlashCFI01 *flash,
-                            hwaddr base, hwaddr size,
-                            MemoryRegion *sysmem)
-{
-    DeviceState *dev = DEVICE(flash);
+    /* Map legacy -drive if=pflash to machine properties */
+    pflash_cfi01_legacy_drive(PFLASH_CFI01(dev),
+                              drive_get(IF_PFLASH, 0, index));
 
-    assert(QEMU_IS_ALIGNED(size, VIRT_FLASH_SECTOR_SIZE));
-    assert(size / VIRT_FLASH_SECTOR_SIZE <= UINT32_MAX);
-    qdev_prop_set_uint32(dev, "num-blocks", size / VIRT_FLASH_SECTOR_SIZE);
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
 
     memory_region_add_subregion(sysmem, base,
-                                sysbus_mmio_get_region(SYS_BUS_DEVICE(dev),
-                                                       0));
+                                sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0));
+
+    g_free(name);
+    return PFLASH_CFI01(dev);
 }
 
-static void virt_flash_map(VirtMachineState *vms,
-                           MemoryRegion *sysmem,
-                           MemoryRegion *secure_sysmem)
+static void virt_flash_create(VirtMachineState *vms,
+                              MemoryRegion *sysmem,
+                              MemoryRegion *secure_sysmem)
 {
+    hwaddr flashsize = vms->memmap[VIRT_FLASH].size / 2;
+    hwaddr flashbase = vms->memmap[VIRT_FLASH].base;
+
     /*
-     * Map two flash devices to fill the VIRT_FLASH space in the memmap.
+     * Map the two flash devices to fill the VIRT_FLASH space in the memmap.
      * sysmem is the system memory space. secure_sysmem is the secure view
      * of the system, and the first flash device should be made visible only
      * there. The second flash device is visible to both secure and nonsecure.
      * If sysmem == secure_sysmem this means there is no separate Secure
      * address space and both flash devices are generally visible.
      */
-    hwaddr flashsize = vms->memmap[VIRT_FLASH].size / 2;
-    hwaddr flashbase = vms->memmap[VIRT_FLASH].base;
-
-    virt_flash_map1(vms->flash[0], flashbase, flashsize,
-                    secure_sysmem);
-    virt_flash_map1(vms->flash[1], flashbase + flashsize, flashsize,
-                    sysmem);
+    vms->flash[0] = virt_flash_create1(vms, 0, flashbase, flashsize,
+                                       secure_sysmem);
+    vms->flash[1] = virt_flash_create1(vms, 1, flashbase + flashsize, flashsize,
+                                       sysmem);
 }
 
 static void virt_flash_fdt(VirtMachineState *vms,
@@ -1371,17 +1368,8 @@ static bool virt_firmware_init(VirtMachineState *vms,
                                MemoryRegion *sysmem,
                                MemoryRegion *secure_sysmem)
 {
-    int i;
     const char *bios_name;
     BlockBackend *pflash_blk0;
-
-    /* Map legacy -drive if=pflash to machine properties */
-    for (i = 0; i < ARRAY_SIZE(vms->flash); i++) {
-        pflash_cfi01_legacy_drive(vms->flash[i],
-                                  drive_get(IF_PFLASH, 0, i));
-    }
-
-    virt_flash_map(vms, sysmem, secure_sysmem);
 
     pflash_blk0 = pflash_cfi01_get_blk(vms->flash[0]);
 
@@ -2286,6 +2274,8 @@ static void machvirt_init(MachineState *machine)
         memory_region_add_subregion_overlap(secure_sysmem, 0, sysmem, -1);
     }
 
+    virt_flash_create(vms, sysmem, secure_sysmem ?: sysmem);
+
     firmware_loaded = virt_firmware_init(vms, sysmem,
                                          secure_sysmem ?: sysmem);
 
@@ -2801,6 +2791,35 @@ static void virt_set_oem_table_id(Object *obj, const char *value,
     strncpy(vms->oem_table_id, value, 8);
 }
 
+static char *virt_get_pflash0(Object *obj, Error **errp)
+{
+    VirtMachineState *vms = VIRT_MACHINE(obj);
+
+    return g_strdup(vms->pflash[0]);
+}
+
+static void virt_set_pflash0(Object *obj, const char *value, Error **errp)
+{
+    VirtMachineState *vms = VIRT_MACHINE(obj);
+
+    g_free(vms->pflash[0]);
+    vms->pflash[0] = g_strdup(value);
+}
+
+static char *virt_get_pflash1(Object *obj, Error **errp)
+{
+    VirtMachineState *vms = VIRT_MACHINE(obj);
+
+    return g_strdup(vms->pflash[1]);
+}
+
+static void virt_set_pflash1(Object *obj, const char *value, Error **errp)
+{
+    VirtMachineState *vms = VIRT_MACHINE(obj);
+
+    g_free(vms->pflash[1]);
+    vms->pflash[1] = g_strdup(value);
+}
 
 bool virt_is_acpi_enabled(VirtMachineState *vms)
 {
@@ -3503,6 +3522,18 @@ static void virt_machine_class_init(ObjectClass *oc, const void *data)
                                           "in ACPI table header."
                                           "The string may be up to 8 bytes in size");
 
+    /* TODO: set_description */
+    object_class_property_add_str(oc, "pflash0", virt_get_pflash0,
+                                  virt_set_pflash0);
+    object_class_property_set_description(oc, "pflash0",
+                                          "The drive used for the lower flash "
+                                          "device");
+
+    object_class_property_add_str(oc, "pflash1", virt_get_pflash1,
+                                  virt_set_pflash1);
+    object_class_property_set_description(oc, "pflash1",
+                                          "The drive used for the upper flash "
+                                          "device");
 }
 
 static void virt_instance_init(Object *obj)
@@ -3546,8 +3577,6 @@ static void virt_instance_init(Object *obj)
     vms->mte = false;
 
     vms->irqmap = a15irqmap;
-
-    virt_flash_create(vms);
 
     vms->oem_id = g_strndup(ACPI_BUILD_APPNAME6, 6);
     vms->oem_table_id = g_strndup(ACPI_BUILD_APPNAME8, 8);
