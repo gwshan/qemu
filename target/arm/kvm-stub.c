@@ -60,6 +60,11 @@ void kvm_arm_add_vcpu_properties(ARMCPU *cpu)
     g_assert_not_reached();
 }
 
+int kvm_arm_vcpu_finalize(ARMCPU *cpu, int feature)
+{
+    g_assert_not_reached();
+}
+
 int kvm_arm_get_max_vm_ipa_size(MachineState *ms, bool *fixed_ipa)
 {
     g_assert_not_reached();
@@ -116,6 +121,16 @@ void kvm_arm_cpu_pre_save(ARMCPU *cpu)
 }
 
 bool kvm_arm_cpu_post_load(ARMCPU *cpu)
+{
+    g_assert_not_reached();
+}
+
+int kvm_arm_rme_init(MachineState *ms)
+{
+    g_assert_not_reached();
+}
+
+int kvm_arm_rme_vm_type(MachineState *ms)
 {
     g_assert_not_reached();
 }
