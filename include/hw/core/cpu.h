@@ -428,6 +428,8 @@ struct CPUState {
     uint32_t can_do_io;
     int32_t exception_index;
 
+    bool cold_booted;
+
     AccelCPUState *accel;
     /* shared by kvm and hvf */
     bool vcpu_dirty;
