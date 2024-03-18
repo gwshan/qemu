@@ -17,6 +17,7 @@ DECLARE_INSTANCE_CHECKER(TestState, TEST, TYPE_TEST_PCI_DEVICE)
 struct TestState {
     PCIDevice pdev;
     MemoryRegion mmio;
+    QemuThread thread;
 
     uint32_t num;
     uint64_t desc_phys;
@@ -30,9 +31,11 @@ struct TestState {
     uint16_t avail_idx;
     uint16_t last_avail_idx;
     uint16_t last_used_idx;
+
+    uint64_t stats_read_cnt;
 };
 
-static void read_pull_desc(TestState *t)
+static void test_reader_pull_desc(TestState *t)
 {
     uint16_t last_avail_idx;
     uint32_t head;
@@ -58,28 +61,26 @@ static void read_pull_desc(TestState *t)
     __asm__ volatile("dmb ishst" : : : "memory");
 
     t->used->idx = t->last_used_idx;
+
+#if 0
+    if (++t->stats_read_cnt % 1000000 == 0) {
+        fprintf(stdout, "Read count: %ld\n", t->stats_read_cnt);
+    }
+#endif
 }
 
-static void *test_reader(void *arg)
+static void *test_reader_thread(void *arg)
 {
     TestState *t = arg;
 
+    /* Wait until the queue setup is completed */
+    do { sleep(1); } while (!t->used);
+
     while (true) {
-        read_pull_desc(t);
+        test_reader_pull_desc(t);
     }
 
     return NULL;
-}
-
-static void test_start_reader(TestState *t)
-{
-     pthread_t tid;
-     int ret;
-
-     ret = pthread_create(&tid, NULL, test_reader, NULL);
-     assert(!ret);
-     ret = pthread_join(tid, NULL);
-     assert(!ret); 
 }
 
 static uint64_t test_mmio_read(void *opaque, hwaddr addr, unsigned size)
@@ -112,8 +113,6 @@ static void test_mmio_write(void *opaque, hwaddr addr, uint64_t val, unsigned si
         t->used_phys = val;
         l = 3 * sizeof(uint16_t) + t->num * sizeof(struct vring_used_elem);
         t->used = cpu_physical_memory_map(val, &l, true);
-
-        test_start_reader(t);
         break;
     default:
     }
@@ -146,6 +145,9 @@ static void test_realize(PCIDevice *pdev, Error **errp)
     memory_region_init_io(&t->mmio, OBJECT(t), &test_mmio_ops, t,
 			  "test-mmio", 0x10000);
     pci_register_bar(pdev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &t->mmio); 
+
+    qemu_thread_create(&t->thread, "test_reader", test_reader_thread,
+                       t, QEMU_THREAD_JOINABLE);
 }
 
 static void test_class_init(ObjectClass *class, void *data)
@@ -166,9 +168,12 @@ static void test_instance_init(Object *obj)
     TestState *t = TEST(obj);
 
     t->num = 0;
-    t->desc = 0;
-    t->avail = 0;
-    t->used = 0;
+    t->desc_phys = 0;
+    t->avail_phys = 0;
+    t->used_phys = 0;
+    t->desc = NULL;
+    t->avail = NULL;
+    t->used = NULL;
 }
 
 static const TypeInfo test_info = {
