@@ -648,16 +648,19 @@ int kvm_arch_init_vcpu(CPUState *cs)
     /* Do KVM_ARM_VCPU_INIT ioctl */
     ret = kvm_arm_vcpu_init(cs);
     if (ret) {
+	fprintf(stdout, "%s: Error %d from kvm_arm_vcpu_init()\n", __func__, ret);
         return ret;
     }
 
     if (cpu_isar_feature(aa64_sve, cpu)) {
         ret = kvm_arm_sve_set_vls(cs);
         if (ret) {
+            fprintf(stdout, "%s: Error %d from kvm_arm_sve_set_vls()\n", __func__, ret);
             return ret;
         }
         ret = kvm_arm_vcpu_finalize(cs, KVM_ARM_VCPU_SVE);
         if (ret) {
+            fprintf(stdout, "%s: Error %d from kvm_arm_vcpu_finalize()\n", __func__, ret);
             return ret;
         }
     }
@@ -679,6 +682,7 @@ int kvm_arch_init_vcpu(CPUState *cs)
      */
     ret = kvm_get_one_reg(cs, ARM64_SYS_REG(ARM_CPU_ID_MPIDR), &mpidr);
     if (ret) {
+        fprintf(stdout, "%s: Error %d from kvm_get_one_reg()\n", __func__, ret);
         return ret;
     }
     cpu->mp_affinity = mpidr & ARM64_AFFINITY_MASK;

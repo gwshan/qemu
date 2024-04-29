@@ -682,6 +682,7 @@ void kvm_arm_create_host_vcpu(ARMCPU *cpu)
      */
     ret = kvm_arch_init_vcpu(cs);
     if (ret < 0) {
+        fprintf(stdout, "%s: xxxxxxxxxx\n", __func__);
         error_report("Failed to initialize host vcpu %ld", vcpu_id);
         abort();
     }

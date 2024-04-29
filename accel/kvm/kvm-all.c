@@ -343,12 +343,14 @@ int kvm_create_vcpu(CPUState *cpu)
     /* check if the KVM vCPU already exist but is parked */
     ret = kvm_get_vcpu(s, kvm_arch_vcpu_id(cpu));
     if (ret > 0) {
+	fprintf(stdout, "%s: KVM vCPU already exist\n", __func__);
         goto found;
     }
 
     /* create a new KVM vcpu */
     ret = kvm_vm_ioctl(s, KVM_CREATE_VCPU, (void *)vcpu_id);
     if (ret < 0) {
+	fprintf(stdout, "%s: Error %d from KVM_CREATE_VCPU\n", __func__, ret);
         return ret;
     }
 
