@@ -289,8 +289,13 @@ static bool kvm_arm_get_host_cpu_features(ARMHostCPUFeatures *ahcf)
     ahcf->target = init.target;
     ahcf->dtb_compatible = "arm,arm-v8";
 
+    /*
+     * SVE is explicitly disabled. Otherwise, the non-cold-booted
+     * CPUs can't be initialized in the vCPU hotplug scenario.
+     */
     err = read_sys_reg64(fdarray[2], &ahcf->isar.id_aa64pfr0,
                          ARM64_SYS_REG(3, 0, 0, 4, 0));
+    ahcf->isar.id_aa64pfr0 &= ~R_ID_AA64PFR0_SVE_MASK;
     if (unlikely(err < 0)) {
         /*
          * Before v4.15, the kernel only exposed a limited number of system
@@ -865,12 +870,16 @@ static int kvm_arm_init_cpreg_list(ARMCPU *cpu)
     rl.n = 0;
     ret = kvm_vcpu_ioctl(cs, KVM_GET_REG_LIST, &rl);
     if (ret != -E2BIG) {
+        fprintf(stderr, "%s: Error %d from kvm_vcpu_ioctl(KVM_GET_REG_LIST)\n",
+                __func__, ret);
         return ret;
     }
     rlp = g_malloc(sizeof(struct kvm_reg_list) + rl.n * sizeof(uint64_t));
     rlp->n = rl.n;
     ret = kvm_vcpu_ioctl(cs, KVM_GET_REG_LIST, rlp);
     if (ret) {
+        fprintf(stderr, "%s: Error %d from kvm_vcpu_ioctl(KVM_GET_REG_LIST-1)\n",
+                __func__, ret);
         goto out;
     }
     /* Sort the list we get back from the kernel, since cpreg_tuples
@@ -2047,16 +2056,22 @@ int kvm_arch_init_vcpu(CPUState *cs)
     /* Do KVM_ARM_VCPU_INIT ioctl */
     ret = kvm_arm_vcpu_init(cpu);
     if (ret) {
+        fprintf(stderr, "%s: Error %d from kvm_arm_vcpu_init()\n",
+                __func__, ret);
         return ret;
     }
 
     if (cpu_isar_feature(aa64_sve, cpu)) {
         ret = kvm_arm_sve_set_vls(cpu);
         if (ret) {
+            fprintf(stderr, "%s: Error %d from kvm_arm_sve_set_vls()\n",
+                    __func__, ret);
             return ret;
         }
         ret = kvm_arm_vcpu_finalize(cpu, KVM_ARM_VCPU_SVE);
         if (ret) {
+            fprintf(stderr, "%s: Error %d from kvm_arm_vcpu_finalize()\n",
+                    __func__, ret);
             return ret;
         }
     }
@@ -2079,6 +2094,8 @@ int kvm_arch_init_vcpu(CPUState *cs)
      */
     ret = kvm_get_one_reg(cs, ARM64_SYS_REG(ARM_CPU_ID_MPIDR), &mpidr);
     if (ret) {
+        fprintf(stderr, "%s: Error %d from kvm_get_one_reg()\n",
+                __func__, ret);
         return ret;
     }
     cpu->mp_affinity = mpidr & ARM64_AFFINITY_MASK;

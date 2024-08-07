@@ -1474,6 +1474,8 @@ static void arm_cpu_initfn(Object *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
+    fprintf(stdout, "%s\n", __func__);
+
     cpu->cp_regs = g_hash_table_new_full(g_direct_hash, g_direct_equal,
                                          NULL, g_free);
 
@@ -1718,6 +1720,8 @@ void arm_cpu_post_init(Object *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
+    fprintf(stdout, "%s\n", __func__);
+
     /*
      * Some features imply others. Figure this out now, because we
      * are going to look at the feature bits in deciding which
@@ -1958,6 +1962,8 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
     ARMCPUClass *acc = ARM_CPU_GET_CLASS(dev);
     CPUARMState *env = &cpu->env;
     Error *local_err = NULL;
+
+    fprintf(stdout, "%s\n", __func__);
 
 #if defined(CONFIG_TCG) && !defined(CONFIG_USER_ONLY)
     /* Use pc-relative instructions in system-mode */

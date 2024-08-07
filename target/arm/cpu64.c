@@ -711,6 +711,9 @@ static void aarch64_host_initfn(Object *obj)
 {
 #if defined(CONFIG_KVM)
     ARMCPU *cpu = ARM_CPU(obj);
+
+    fprintf(stdout, "%s\n", __func__);
+
     kvm_arm_set_cpu_features_from_host(cpu);
     if (arm_feature(&cpu->env, ARM_FEATURE_AARCH64)) {
         aarch64_add_sve_properties(obj);
@@ -784,6 +787,8 @@ static void aarch64_cpu_initfn(Object *obj)
 {
     CPUState *cs = CPU(obj);
 
+    fprintf(stdout, "%s\n", __func__);
+
     /*
      * we start every ARM64 vcpu as disabled possible vCPU. It needs to be
      * enabled explicitly
@@ -822,6 +827,8 @@ static void aarch64_cpu_class_init(ObjectClass *oc, void *data)
 static void aarch64_cpu_instance_init(Object *obj)
 {
     ARMCPUClass *acc = ARM_CPU_GET_CLASS(obj);
+
+    fprintf(stdout, "%s\n", __func__);
 
     acc->info->initfn(obj);
     arm_cpu_post_init(obj);

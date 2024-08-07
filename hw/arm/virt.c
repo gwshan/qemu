@@ -2345,6 +2345,10 @@ static void machvirt_init(MachineState *machine)
     unsigned int smp_cpus = machine->smp.cpus;
     unsigned int max_cpus = machine->smp.max_cpus;
 
+    fprintf(stdout, "\n");
+    fprintf(stdout, "==================================================\n");
+    fprintf(stdout, "\n");
+
     /*
      * In accelerated mode, the memory map is computed earlier in kvm_type()
      * to create a VM with the right number of IPA bits.
@@ -2495,6 +2499,8 @@ static void machvirt_init(MachineState *machine)
         Object *cpuobj;
         CPUState *cs;
 
+        fprintf(stdout, "===> %s: create CPU object (idx=%d, type=[%s])\n",
+                __func__, n, possible_cpus->cpus[n].type);
         cpuobj = object_new(possible_cpus->cpus[n].type);
         cs = CPU(cpuobj);
 
@@ -2509,6 +2515,8 @@ static void machvirt_init(MachineState *machine)
                                 virt_get_thread_id(machine, n), NULL);
 
         if (n < smp_cpus) {
+            fprintf(stdout, "===> %s: realize CPU object (idx=%d)\n",
+                    __func__, n);
             qdev_realize(DEVICE(cpuobj), NULL, &error_fatal);
             object_unref(cpuobj);
         } else {
@@ -2645,6 +2653,8 @@ static void machvirt_init(MachineState *machine)
 
     vms->machine_done.notify = virt_machine_done;
     qemu_add_machine_init_done_notifier(&vms->machine_done);
+
+    // exit(0);
 }
 
 static bool virt_get_secure(Object *obj, Error **errp)
@@ -3089,6 +3099,8 @@ static void virt_cpu_pre_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
     CPUState *cs = CPU(dev);
     CPUArchId *cpu_slot;
 
+    fprintf(stdout, "%s\n", __func__);
+
     if (dev->hotplugged && !vms->acpi_dev) {
         error_setg(errp, "GED acpi device does not exists");
         return;
@@ -3177,6 +3189,8 @@ static void virt_cpu_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
     CPUState *cs = CPU(dev);
     Error *local_err = NULL;
     CPUArchId *cpu_slot;
+
+    fprintf(stdout, "%s\n", __func__);
 
     /* insert the cold/hot-plugged vcpu in the slot */
     cpu_slot = virt_find_cpu_slot(ms, cs->cpu_index);

@@ -204,6 +204,8 @@ static void cpu_common_realizefn(DeviceState *dev, Error **errp)
     CPUState *cpu = CPU(dev);
     Object *machine = qdev_get_machine();
 
+    fprintf(stdout, "%s\n", __func__);
+
     /* qdev_get_machine() can return something that's not TYPE_MACHINE
      * if this is one of the user-only emulators; in that case there's
      * no need to check the ignore_memory_transaction_failures board flag.
@@ -251,6 +253,8 @@ static void cpu_common_unrealizefn(DeviceState *dev)
 static void cpu_common_initfn(Object *obj)
 {
     CPUState *cpu = CPU(obj);
+
+    fprintf(stdout, "%s\n", __func__);
 
     gdb_init_cpu(cpu);
     cpu->cpu_index = UNASSIGNED_CPU_INDEX;
