@@ -188,16 +188,6 @@ bool kvm_arm_pmu_supported(void);
  */
 bool kvm_arm_sve_supported(void);
 
-/**
- * kvm_arm_get_max_vm_ipa_size:
- * @ms: Machine state handle
- * @fixed_ipa: True when the IPA limit is fixed at 40. This is the case
- * for legacy KVM.
- *
- * Returns the number of bits in the IPA address space supported by KVM
- */
-int kvm_arm_get_max_vm_ipa_size(MachineState *ms, bool *fixed_ipa);
-
 int kvm_arm_vgic_probe(void);
 
 void kvm_arm_pmu_init(ARMCPU *cpu);
@@ -244,11 +234,6 @@ static inline void kvm_arm_set_cpu_features_from_host(ARMCPU *cpu)
 }
 
 static inline void kvm_arm_add_vcpu_properties(ARMCPU *cpu)
-{
-    g_assert_not_reached();
-}
-
-static inline int kvm_arm_get_max_vm_ipa_size(MachineState *ms, bool *fixed_ipa)
 {
     g_assert_not_reached();
 }

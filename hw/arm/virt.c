@@ -2995,10 +2995,12 @@ static HotplugHandler *virt_machine_get_hotplug_handler(MachineState *machine,
 static int virt_kvm_type(MachineState *ms, const char *type_str)
 {
     VirtMachineState *vms = VIRT_MACHINE(ms);
-    int max_vm_pa_size, requested_pa_size;
+    int type, max_vm_pa_size, requested_pa_size;
     bool fixed_ipa;
 
-    max_vm_pa_size = kvm_arm_get_max_vm_ipa_size(ms, &fixed_ipa);
+    /* The IPA size is 40 bits when the type is zero */
+    type = kvm_arch_get_default_type(ms);
+    max_vm_pa_size = (type == 0) ? 40 : type;
 
     /* we freeze the memory map to compute the highest gpa */
     virt_set_memmap(vms, max_vm_pa_size);
@@ -3017,12 +3019,8 @@ static int virt_kvm_type(MachineState *ms, const char *type_str)
                      requested_pa_size, max_vm_pa_size);
         return -1;
     }
-    /*
-     * We return the requested PA log size, unless KVM only supports
-     * the implicit legacy 40b IPA setting, in which case the kvm_type
-     * must be 0.
-     */
-    return fixed_ipa ? 0 : requested_pa_size;
+
+    return type;
 }
 #endif /* CONFIG_KVM */
 
