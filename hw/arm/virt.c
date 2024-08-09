@@ -2991,6 +2991,7 @@ static HotplugHandler *virt_machine_get_hotplug_handler(MachineState *machine,
  * for arm64 kvm_type [7-0] encodes the requested number of bits
  * in the IPA address space
  */
+#ifdef CONFIG_KVM
 static int virt_kvm_type(MachineState *ms, const char *type_str)
 {
     VirtMachineState *vms = VIRT_MACHINE(ms);
@@ -3025,6 +3026,7 @@ static int virt_kvm_type(MachineState *ms, const char *type_str)
      */
     return fixed_ipa ? 0 : requested_pa_size;
 }
+#endif /* CONFIG_KVM */
 
 static void virt_machine_class_init(ObjectClass *oc, void *data)
 {
@@ -3084,7 +3086,9 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
 #endif
     mc->valid_cpu_types = valid_cpu_types;
     mc->get_default_cpu_node_id = virt_get_default_cpu_node_id;
+#ifdef CONFIG_KVM
     mc->kvm_type = virt_kvm_type;
+#endif
     assert(!mc->get_hotplug_handler);
     mc->get_hotplug_handler = virt_machine_get_hotplug_handler;
     hc->pre_plug = virt_machine_device_pre_plug_cb;
