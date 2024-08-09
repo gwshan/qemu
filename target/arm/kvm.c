@@ -526,22 +526,13 @@ bool kvm_arm_pmu_supported(void)
     return kvm_check_extension(kvm_state, KVM_CAP_ARM_PMU_V3);
 }
 
-static int kvm_arm_get_max_vm_ipa_size(MachineState *ms, bool *fixed_ipa)
+int kvm_arch_get_default_type(MachineState *ms)
 {
     KVMState *s = KVM_STATE(ms->accelerator);
     int ret;
 
     ret = kvm_check_extension(s, KVM_CAP_ARM_VM_IPA_SIZE);
-    *fixed_ipa = ret <= 0;
-
-    return ret > 0 ? ret : 40;
-}
-
-int kvm_arch_get_default_type(MachineState *ms)
-{
-    bool fixed_ipa;
-    int size = kvm_arm_get_max_vm_ipa_size(ms, &fixed_ipa);
-    return fixed_ipa ? 0 : size;
+    return (ret <= 0) ? 0 : ret;
 }
 
 int kvm_arch_init(MachineState *ms, KVMState *s)
