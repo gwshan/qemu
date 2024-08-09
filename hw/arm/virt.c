@@ -3005,9 +3005,7 @@ static int virt_kvm_type(MachineState *ms, const char *type_str)
 
     requested_pa_size = 64 - clz64(vms->highest_gpa);
 
-    /*
-     * KVM requires the IPA size to be at least 32 bits.
-     */
+    /* KVM requires the IPA size to be at least 32 bits */
     if (requested_pa_size < 32) {
         requested_pa_size = 32;
     }
