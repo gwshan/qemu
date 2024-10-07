@@ -792,6 +792,18 @@ static bool kvm_arm_reg_syncs_via_cpreg_list(uint64_t regidx)
     case KVM_REG_ARM64_SVE:
         return false;
     default:
+        /*
+         * With branch mpam/v6.11-rc1 from James Morse, error -22 is
+         * returned on attempt to write ID_DFR0_EL1. I'm not sure if
+         * same issue exists on upstream (v6.11.rc5) or not.
+         *
+         * The quick and temporary solution is to ignore this register for
+         * now.
+         */
+        if (regidx == 0x603000000013c00a) {
+            return false;
+        }
+
         return true;
     }
 }
