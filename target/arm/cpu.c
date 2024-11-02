@@ -2694,6 +2694,16 @@ static int64_t arm_cpu_get_arch_id(CPUState *cs)
     return cpu->mp_affinity;
 }
 
+static bool arm_cpu_persistent_status(CPUState *cs)
+{
+    return true;
+}
+
+static bool arm_cpu_enabled_status(CPUState *cs)
+{
+    return DEVICE(cs)->realized;
+}
+
 static void arm_cpu_class_init(ObjectClass *oc, void *data)
 {
     ARMCPUClass *acc = ARM_CPU_CLASS(oc);
@@ -2714,6 +2724,8 @@ static void arm_cpu_class_init(ObjectClass *oc, void *data)
     cc->mmu_index = arm_cpu_mmu_index;
     cc->dump_state = arm_cpu_dump_state;
     cc->get_arch_id = arm_cpu_get_arch_id;
+    cc->cpu_persistent_status = arm_cpu_persistent_status;
+    cc->cpu_enabled_status = arm_cpu_enabled_status;
     cc->set_pc = arm_cpu_set_pc;
     cc->get_pc = arm_cpu_get_pc;
     cc->gdb_read_register = arm_cpu_gdb_read_register;
