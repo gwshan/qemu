@@ -307,8 +307,14 @@ static bool kvm_arm_get_host_cpu_features(ARMHostCPUFeatures *ahcf)
     ahcf->target = init.target;
     ahcf->dtb_compatible = "arm,arm-v8";
 
+    /*
+     * The SVE capability must be disabled. Otheriwse, the guest fails
+     * to start with the error message "qemu-system-aarch64: Failed to
+     * initialize host vcpu 1"
+     */
     err = read_sys_reg64(fdarray[2], &ahcf->isar.id_aa64pfr0,
                          ARM64_SYS_REG(3, 0, 0, 4, 0));
+    ahcf->isar.id_aa64pfr0 = FIELD_SDP64(ahcf->isar.id_aa64pfr0, ID_AA64PFR0, SVE, 0);
     if (unlikely(err < 0)) {
         /*
          * Before v4.15, the kernel only exposed a limited number of system
