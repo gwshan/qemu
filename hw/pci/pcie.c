@@ -28,6 +28,7 @@
 #include "hw/pci/pcie_regs.h"
 #include "hw/pci/pcie_port.h"
 #include "qemu/range.h"
+#include "debug.h"
 #include "trace.h"
 
 //#define DEBUG_PCIE
@@ -511,6 +512,10 @@ void pcie_cap_slot_pre_plug_cb(HotplugHandler *hotplug_dev, DeviceState *dev,
     PCIDevice *hotplug_pdev = PCI_DEVICE(hotplug_dev);
     uint8_t *exp_cap = hotplug_pdev->config + hotplug_pdev->exp.exp_cap;
     uint32_t sltcap = pci_get_word(exp_cap + PCI_EXP_SLTCAP);
+    bool debug = qemu_is_debug_object(OBJECT(dev));
+
+    QEMU_DBG(debug, "%s: hotplug_ctrl=0x%lx, dev=0x%lx\n",
+             __func__, (unsigned long)hotplug_dev, (unsigned long)dev);
 
     /* Check if hot-plug is disabled on the slot */
     if (dev->hotplugged && (sltcap & PCI_EXP_SLTCAP_HPC) == 0) {
@@ -529,6 +534,10 @@ void pcie_cap_slot_plug_cb(HotplugHandler *hotplug_dev, DeviceState *dev,
     uint8_t *exp_cap = hotplug_pdev->config + hotplug_pdev->exp.exp_cap;
     PCIDevice *pci_dev = PCI_DEVICE(dev);
     uint32_t lnkcap = pci_get_long(exp_cap + PCI_EXP_LNKCAP);
+    bool debug = qemu_is_debug_object(OBJECT(dev));
+
+    QEMU_DBG(debug, "%s: hotplug_ctrl=0x%lx, dev=0x%lx\n",
+             __func__, (unsigned long)hotplug_dev, (unsigned long)dev);
 
     if (pci_is_vf(pci_dev)) {
         /* Virtual function cannot be physically disconnected */
@@ -571,6 +580,11 @@ void pcie_cap_slot_plug_cb(HotplugHandler *hotplug_dev, DeviceState *dev,
 void pcie_cap_slot_unplug_cb(HotplugHandler *hotplug_dev, DeviceState *dev,
                              Error **errp)
 {
+    bool debug = qemu_is_debug_object(OBJECT(dev));
+
+    QEMU_DBG(debug, "%s: hotlug_ctrl=0x%lx, dev=0x%lx\n",
+             __func__, (unsigned long)hotplug_dev, (unsigned long)dev);
+
     qdev_unrealize(dev);
 }
 
@@ -615,6 +629,10 @@ void pcie_cap_slot_unplug_request_cb(HotplugHandler *hotplug_dev,
     uint8_t *exp_cap = hotplug_pdev->config + hotplug_pdev->exp.exp_cap;
     uint32_t sltcap = pci_get_word(exp_cap + PCI_EXP_SLTCAP);
     uint16_t sltctl = pci_get_word(exp_cap + PCI_EXP_SLTCTL);
+    bool debug = qemu_is_debug_object(OBJECT(dev));
+
+    QEMU_DBG(debug, "%s: hotplug_ctrl=0x%lx, dev=0x%lx\n",
+             __func__, (unsigned long)hotplug_dev, (unsigned long)dev);
 
     /* Check if hot-unplug is disabled on the slot */
     if ((sltcap & PCI_EXP_SLTCAP_HPC) == 0) {

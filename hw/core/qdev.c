@@ -38,6 +38,7 @@
 #include "hw/sysbus.h"
 #include "hw/qdev-clock.h"
 #include "migration/vmstate.h"
+#include "debug.h"
 #include "trace.h"
 
 static bool qdev_hot_added = false;
@@ -461,6 +462,10 @@ static void device_set_realized(Object *obj, bool value, Error **errp)
     Error *local_err = NULL;
     bool unattached_parent = false;
     static int unattached_count;
+    bool debug = qemu_is_debug_object(obj);
+
+    QEMU_DBG(debug, "==================== %s ====================\n",
+             object_get_typename(obj));
 
     if (dev->hotplugged && !dc->hotpluggable) {
         error_setg(errp, "Device '%s' does not support hotplugging",
@@ -485,6 +490,8 @@ static void device_set_realized(Object *obj, bool value, Error **errp)
 
         hotplug_ctrl = qdev_get_hotplug_handler(dev);
         if (hotplug_ctrl) {
+            QEMU_DBG(debug, "%s: hotplug_ctrl=0x%lx, dev=0x%lx\n",
+                     __func__, (unsigned long)hotplug_ctrl, (unsigned long)dev);
             hotplug_handler_pre_plug(hotplug_ctrl, dev, &local_err);
             if (local_err != NULL) {
                 goto fail;
@@ -549,6 +556,8 @@ static void device_set_realized(Object *obj, bool value, Error **errp)
         dev->pending_deleted_event = false;
 
         if (hotplug_ctrl) {
+            QEMU_DBG(debug, "%s: hotplug_ctrl=0x%lx, dev=0x%lx\n",
+                     __func__, (unsigned long)hotplug_ctrl, (unsigned long)dev);
             hotplug_handler_plug(hotplug_ctrl, dev, &local_err);
             if (local_err != NULL) {
                 goto child_realize_fail;

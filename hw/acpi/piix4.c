@@ -43,6 +43,7 @@
 #include "migration/vmstate.h"
 #include "hw/core/cpu.h"
 #include "qom/object.h"
+#include "debug.h"
 
 #define GPE_BASE 0xafe0
 #define GPE_LEN 4
@@ -320,6 +321,10 @@ static void piix4_device_pre_plug_cb(HotplugHandler *hotplug_dev,
                                     DeviceState *dev, Error **errp)
 {
     PIIX4PMState *s = PIIX4_PM(hotplug_dev);
+    bool debug = qemu_is_debug_object(OBJECT(dev));
+
+    QEMU_DBG(debug, "%s: hotplug_ctrl=0x%lx, dev=0x%lx\n",
+             __func__, (unsigned long)hotplug_dev, (unsigned long)dev);
 
     if (object_dynamic_cast(OBJECT(dev), TYPE_PCI_DEVICE)) {
         acpi_pcihp_device_pre_plug_cb(hotplug_dev, dev, errp);
@@ -340,6 +345,10 @@ static void piix4_device_plug_cb(HotplugHandler *hotplug_dev,
                                  DeviceState *dev, Error **errp)
 {
     PIIX4PMState *s = PIIX4_PM(hotplug_dev);
+    bool debug = qemu_is_debug_object(OBJECT(dev));
+
+    QEMU_DBG(debug, "%s: hotplug_ctrl=0x%lx, dev=0x%lx\n",
+             __func__, (unsigned long)hotplug_dev, (unsigned long)dev);
 
     if (object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM)) {
         if (object_dynamic_cast(OBJECT(dev), TYPE_NVDIMM)) {
@@ -365,6 +374,10 @@ static void piix4_device_unplug_request_cb(HotplugHandler *hotplug_dev,
                                            DeviceState *dev, Error **errp)
 {
     PIIX4PMState *s = PIIX4_PM(hotplug_dev);
+    bool debug = qemu_is_debug_object(OBJECT(dev));
+
+    QEMU_DBG(debug, "%s: hotplug_ctrl=0x%lx, dev=0x%lx\n",
+             __func__, (unsigned long)hotplug_dev, (unsigned long)dev);
 
     if (s->acpi_memory_hotplug.is_enabled &&
         object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM)) {
@@ -386,6 +399,10 @@ static void piix4_device_unplug_cb(HotplugHandler *hotplug_dev,
                                    DeviceState *dev, Error **errp)
 {
     PIIX4PMState *s = PIIX4_PM(hotplug_dev);
+    bool debug = qemu_is_debug_object(OBJECT(dev));
+
+    QEMU_DBG(debug, "%s: hotplug_ctrl=0x%lx, dev=0x%lx\n",
+             __func__, (unsigned long)hotplug_dev, (unsigned long)dev);
 
     if (s->acpi_memory_hotplug.is_enabled &&
         object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM)) {

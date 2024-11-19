@@ -39,6 +39,7 @@
 #include "migration/vmstate.h"
 #include "qapi/error.h"
 #include "qom/qom-qobject.h"
+#include "debug.h"
 #include "trace.h"
 
 #define ACPI_PCIHP_SIZE 0x0018
@@ -272,6 +273,10 @@ void acpi_pcihp_device_pre_plug_cb(HotplugHandler *hotplug_dev,
                                    DeviceState *dev, Error **errp)
 {
     PCIDevice *pdev = PCI_DEVICE(dev);
+    bool debug = qemu_is_debug_object(OBJECT(dev));
+
+    QEMU_DBG(debug, "%s: hotplug_ctrl=0x%lx, dev=0x%lx\n",
+             __func__, (unsigned long)hotplug_dev, (unsigned long)dev);
 
     /* Only hotplugged devices need the hotplug capability. */
     if (dev->hotplugged &&
@@ -290,6 +295,10 @@ void acpi_pcihp_device_plug_cb(HotplugHandler *hotplug_dev, AcpiPciHpState *s,
     PCIDevice *bridge;
     PCIBus *bus;
     int bsel;
+    bool debug = qemu_is_debug_object(OBJECT(dev));
+
+    QEMU_DBG(debug, "%s: hotplug_ctrl=0x%lx, dev=0x%lx\n",
+             __func__, (unsigned long)hotplug_dev, (unsigned long)dev);
 
     /* Don't send event when device is enabled during qemu machine creation:
      * it is present on boot, no hotplug event is necessary. We do send an
@@ -328,7 +337,10 @@ void acpi_pcihp_device_unplug_cb(HotplugHandler *hotplug_dev, AcpiPciHpState *s,
                                  DeviceState *dev, Error **errp)
 {
     PCIDevice *pdev = PCI_DEVICE(dev);
+    bool debug = qemu_is_debug_object(OBJECT(dev));
 
+    QEMU_DBG(debug, "%s: hotplug_ctrl=0x%lx, dev=0x%lx\n",
+             __func__, (unsigned long)hotplug_dev, (unsigned long)dev);
     trace_acpi_pci_unplug(PCI_SLOT(pdev->devfn),
                           acpi_pcihp_get_bsel(pci_get_bus(pdev)));
 
@@ -342,7 +354,10 @@ void acpi_pcihp_device_unplug_request_cb(HotplugHandler *hotplug_dev,
     PCIDevice *pdev = PCI_DEVICE(dev);
     int slot = PCI_SLOT(pdev->devfn);
     int bsel = acpi_pcihp_get_bsel(pci_get_bus(pdev));
+    bool debug = qemu_is_debug_object(OBJECT(dev));
 
+    QEMU_DBG(debug, "%s: hotplug_ctrl=0x%lx, dev=0x%lx\n",
+             __func__, (unsigned long)hotplug_dev, (unsigned long)dev);
     trace_acpi_pci_unplug_request(bsel, slot);
 
     if (bsel < 0) {

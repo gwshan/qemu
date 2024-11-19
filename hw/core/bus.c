@@ -22,9 +22,15 @@
 #include "qemu/ctype.h"
 #include "qemu/module.h"
 #include "qapi/error.h"
+#include "debug.h"
 
 void qbus_set_hotplug_handler(BusState *bus, Object *handler)
 {
+    if (bus && bus->name && strstr(bus->name, "pci")) {
+        QEMU_DBG(true, "%s: bus=0x%lx [%s}, handler=0x%lx\n",
+                 __func__, (unsigned long)bus, bus->name, (unsigned long)handler);
+    }
+
     object_property_set_link(OBJECT(bus), QDEV_HOTPLUG_HANDLER_PROPERTY,
                              handler, &error_abort);
 }

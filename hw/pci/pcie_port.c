@@ -23,6 +23,7 @@
 #include "hw/qdev-properties.h"
 #include "qemu/module.h"
 #include "hw/hotplug.h"
+#include "debug.h"
 
 void pcie_port_init_reg(PCIDevice *d)
 {
