@@ -2,6 +2,7 @@
 # vim: filetype=python
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
+{ 'include': 'qom.json' }
 
 ##
 # @GICCapability:
@@ -45,3 +46,51 @@
 #                     { "version": 3, "emulated": false, "kernel": true } ] }
 ##
 { 'command': 'query-gic-capabilities', 'returns': ['GICCapability'] }
+
+##
+# @RmeMeasurementAlgorithm:
+#
+# The struct describes measurement-algorithms.
+#
+# @measurement-algorithms: measurement algorithm list
+#
+# Since: 10.1 - Provisional
+#               This version is subject to change.
+##
+{ 'struct': 'RmeMeasurementAlgorithm',
+  'data': { 'measurement-algorithms': [ 'RmeGuestMeasurementAlgorithm' ] } }
+
+##
+# @RmeGuestCapabilities:
+#
+# The struct describes capability for a ARM RME.
+#
+# @section: Supported to measurement algorithm
+#
+# Since: 10.1 - Provisional
+#               This version is subject to change.
+##
+{ 'struct': 'RmeGuestCapabilities',
+  'data': { 'section': 'RmeMeasurementAlgorithm' } }
+
+##
+# @query-rme-guest-capabilities:
+#
+# This command is used to get the RME capabilities, and is supported
+# on ARM64 platforms only.
+#
+# Returns: RmeGuestCapabilities objects.
+#
+# Errors:
+#   - if RME is not supported, GenericError
+#
+# Since: 10.1 - Provisional
+#               This version is subject to change.
+#
+# .. qmp-example::
+#
+#     -> { "execute": "query-rme-guest-capabilities" }
+#     <- { "return": { "section": { "measurement-algorithms": ["sha256", "sha512"] } } }
+##
+{ 'command': 'query-rme-guest-capabilities', 'returns': 'RmeGuestCapabilities' }
+
