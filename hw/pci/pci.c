@@ -3160,8 +3160,15 @@ void pci_setup_iommu(PCIBus *bus, const PCIIOMMUOps *ops, void *opaque)
     assert(ops);
     assert(ops->get_address_space);
 
-    bus->iommu_ops = ops;
-    bus->iommu_opaque = opaque;
+    if (!bus->iommu_ops) {
+        bus->iommu_ops = ops;
+        bus->iommu_opaque = opaque;
+    } else {
+        fprintf(stdout, "\n");
+        fprintf(stdout, "===> %s: Failed to override iommu_ops 0x%lx (0x%lx) with 0x%lx (0x%lx)\n",
+                __func__, (unsigned long)(bus->iommu_ops), (unsigned long)(bus->iommu_opaque),
+                (unsigned long)ops, (unsigned long)opaque);
+    }
 }
 
 static void pci_dev_get_w64(PCIBus *b, PCIDevice *dev, void *opaque)

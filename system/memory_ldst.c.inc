@@ -204,10 +204,18 @@ static inline uint16_t glue(address_space_lduw_internal, SUFFIX)(ARG1_DECL,
     hwaddr addr1;
     MemTxResult r;
     bool release_lock = false;
+    bool debug = global_track_memory;
 
+    QEMU_DBG(debug, "%s: addr=0x%lx, endian=%s\n",
+             __func__, addr, endian == DEVICE_LITTLE_ENDIAN ? "little" : "unknown");
+ 
     RCU_READ_LOCK();
     mr = TRANSLATE(addr, &addr1, &l, false, attrs);
+    QEMU_DBG(debug, "%s: mr=[%s], addr1=0x%lx, l=0x%lx\n",
+             __func__, mr->name ? mr->name : "unknown", addr1, l);
+
     if (l < 2 || !memory_access_is_direct(mr, false, attrs)) {
+        QEMU_DBG(debug, "%s: indirect access\n", __func__);
         release_lock |= prepare_mmio_access(mr);
 
         /* I/O case */
@@ -216,6 +224,8 @@ static inline uint16_t glue(address_space_lduw_internal, SUFFIX)(ARG1_DECL,
     } else {
         /* RAM case */
         fuzz_dma_read_cb(addr, 2, mr);
+        QEMU_DBG(debug, "%s: direct access (mr->ram_block=0x%lx)\n",
+                 __func__, (unsigned long)(mr->ram_block));
         ptr = qemu_map_ram_ptr(mr->ram_block, addr1);
         switch (endian) {
         case DEVICE_LITTLE_ENDIAN:

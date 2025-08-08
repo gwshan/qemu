@@ -32,6 +32,7 @@
 #include "hw/boards.h"
 #include "migration/vmstate.h"
 #include "system/address-spaces.h"
+#include "qemu/debug.h"
 
 #include "memory-internal.h"
 
@@ -1468,6 +1469,10 @@ MemTxResult memory_region_dispatch_read(MemoryRegion *mr,
 {
     unsigned size = memop_size(op);
     MemTxResult r;
+    bool debug = global_track_memory;
+
+    QEMU_DBG(debug, "%s: mr=[%s], addr=0x%lx, op=0x%x\n",
+             __func__, mr->name ? mr->name : "unknown", addr, op);
 
     if (mr->alias) {
         return memory_region_dispatch_read(mr->alias,
@@ -1476,6 +1481,8 @@ MemTxResult memory_region_dispatch_read(MemoryRegion *mr,
     }
     if (!memory_region_access_valid(mr, addr, size, false, attrs)) {
         *pval = unassigned_mem_read(mr, addr, size);
+        QEMU_DBG(debug, "%s: return 0x%lx due to memory_region_access_valid()\n",
+                 __func__, *pval);
         return MEMTX_DECODE_ERROR;
     }
 

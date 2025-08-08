@@ -49,6 +49,7 @@
 #include "kvm-cpus.h"
 #include "system/dirtylimit.h"
 #include "qemu/range.h"
+#include "qemu/debug.h"
 
 #include "hw/boards.h"
 #include "system/stats.h"
@@ -3121,6 +3122,7 @@ out_unref:
 int kvm_cpu_exec(CPUState *cpu)
 {
     struct kvm_run *run = cpu->kvm_run;
+    bool debug = false;
     int ret, run_ret;
 
     trace_kvm_cpu_exec();
@@ -3135,6 +3137,8 @@ int kvm_cpu_exec(CPUState *cpu)
 
     do {
         MemTxAttrs attrs;
+
+        debug = false;
 
         if (cpu->vcpu_dirty) {
             Error *err = NULL;
@@ -3219,6 +3223,9 @@ int kvm_cpu_exec(CPUState *cpu)
             break;
         case KVM_EXIT_MMIO:
             /* Called outside BQL */
+            debug = (run->mmio.phys_addr >= 0x8000203000 && run->mmio.phys_addr < 0x8000204000);
+            QEMU_DBG(debug, "%s: KVM_EXIT_MMIO on physical addr 0x%llx (%s)\n",
+                     __func__, run->mmio.phys_addr, run->mmio.is_write ? "write" : "read");
             address_space_rw(&address_space_memory,
                              run->mmio.phys_addr, attrs,
                              run->mmio.data,

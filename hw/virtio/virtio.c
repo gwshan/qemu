@@ -33,6 +33,7 @@
 #include "system/dma.h"
 #include "system/runstate.h"
 #include "virtio-qmp.h"
+#include "qemu/debug.h"
 
 #include "standard-headers/linux/virtio_ids.h"
 #include "standard-headers/linux/vhost_types.h"
@@ -243,7 +244,13 @@ void virtio_init_region_cache(VirtIODevice *vdev, int n)
     hwaddr addr, size;
     int64_t len;
     bool packed;
+    bool debug = false;
 
+    /* as = [virtio-iommu-pci] */
+    QEMU_DBG(debug, "=======================================================\n");
+    QEMU_DBG(debug, "%s: as=[%s], n=%d, desc@0x%lx, avail@0x%lx, used@0x%lx\n",
+             __func__, (vdev->dma_as && vdev->dma_as->name) ? vdev->dma_as->name : "unknown",
+             n, vq->vring.desc, vq->vring.avail, vq->vring.used);
 
     addr = vq->vring.desc;
     if (!addr) {
@@ -377,12 +384,18 @@ static inline uint16_t vring_avail_idx(VirtQueue *vq)
 {
     VRingMemoryRegionCaches *caches = vring_get_region_caches(vq);
     hwaddr pa = offsetof(VRingAvail, idx);
+    bool debug = qemu_dbg_matched_name(vq->vdev->name);
 
     if (!caches) {
+        QEMU_DBG(debug, "%s: No VRingMemoryRegionCaches\n", __func__);
         return 0;
     }
 
+    global_track_memory = true;
     vq->shadow_avail_idx = virtio_lduw_phys_cached(vq->vdev, &caches->avail, pa);
+    global_track_memory = false;
+    QEMU_DBG(debug, "%s: avail_idx=%d from virtio_lduw_phys_cached()\n",
+             __func__, vq->shadow_avail_idx);
     return vq->shadow_avail_idx;
 }
 
@@ -681,11 +694,16 @@ static inline bool is_desc_avail(uint16_t flags, bool wrap_counter)
  * Called within rcu_read_lock().  */
 static int virtio_queue_empty_rcu(VirtQueue *vq)
 {
+    bool debug = qemu_dbg_matched_name(vq->vdev->name);
+    uint16_t avail_idx;
+
     if (virtio_device_disabled(vq->vdev)) {
+        QEMU_DBG(debug, "%s: virtio_device_disabled()\n", __func__);
         return 1;
     }
 
     if (unlikely(!vq->vring.avail)) {
+        QEMU_DBG(debug, "%s: !vq->vring.avail\n", __func__);
         return 1;
     }
 
@@ -693,7 +711,13 @@ static int virtio_queue_empty_rcu(VirtQueue *vq)
         return 0;
     }
 
-    return vring_avail_idx(vq) == vq->last_avail_idx;
+    QEMU_DBG(debug, "%s: shadow_avail_idx=%d  last_avail_idx=%d\n",
+             __func__, vq->shadow_avail_idx, vq->last_avail_idx);
+
+    avail_idx = vring_avail_idx(vq);
+    QEMU_DBG(debug, "%s: avail_idx=%d  last_avail_idx=%d\n",
+             __func__, avail_idx, vq->last_avail_idx);
+    return avail_idx == vq->last_avail_idx;
 }
 
 static int virtio_queue_split_empty(VirtQueue *vq)
@@ -1692,12 +1716,14 @@ static void *virtqueue_split_pop(VirtQueue *vq, size_t sz)
     hwaddr addr[VIRTQUEUE_MAX_SIZE];
     struct iovec iov[VIRTQUEUE_MAX_SIZE];
     VRingDesc desc;
+    bool debug = qemu_dbg_matched_name(vq->vdev->name);
     int rc;
 
     address_space_cache_init_empty(&indirect_desc_cache);
 
     RCU_READ_LOCK_GUARD();
     if (virtio_queue_empty_rcu(vq)) {
+        QEMU_DBG(debug, "%s: virtio_queue_empty_rcu()\n", __func__);
         goto done;
     }
     /* Needed after virtio_queue_empty(), see comment in
@@ -1710,11 +1736,13 @@ static void *virtqueue_split_pop(VirtQueue *vq, size_t sz)
     max = vq->vring.num;
 
     if (vq->inuse >= vq->vring.num) {
+        QEMU_DBG(debug, "%s: Virtqueue size exceeded\n", __func__);
         virtio_error(vdev, "Virtqueue size exceeded");
         goto done;
     }
 
     if (!virtqueue_get_head(vq, vq->last_avail_idx++, &head)) {
+        QEMU_DBG(debug, "%s: virtqueue_get_head() returns error\n", __func__);
         goto done;
     }
 
@@ -1726,11 +1754,13 @@ static void *virtqueue_split_pop(VirtQueue *vq, size_t sz)
 
     caches = vring_get_region_caches(vq);
     if (!caches) {
+        QEMU_DBG(debug, "%s: Region caches not initialized\n", __func__);
         virtio_error(vdev, "Region caches not initialized");
         goto done;
     }
 
     if (caches->desc.len < max * sizeof(VRingDesc)) {
+        QEMU_DBG(debug, "%s: Cannot map descriptor ring\n", __func__);
         virtio_error(vdev, "Cannot map descriptor ring");
         goto done;
     }
@@ -1739,6 +1769,7 @@ static void *virtqueue_split_pop(VirtQueue *vq, size_t sz)
     vring_split_desc_read(vdev, &desc, desc_cache, i);
     if (desc.flags & VRING_DESC_F_INDIRECT) {
         if (!desc.len || (desc.len % sizeof(VRingDesc))) {
+            QEMU_DBG(debug, "%s: Invalid size for indirect buffer table\n", __func__);
             virtio_error(vdev, "Invalid size for indirect buffer table");
             goto done;
         }
@@ -1749,6 +1780,7 @@ static void *virtqueue_split_pop(VirtQueue *vq, size_t sz)
                                        desc.addr, desc.len, false);
         desc_cache = &indirect_desc_cache;
         if (len < desc.len) {
+            QEMU_DBG(debug, "%s: Cannot map indirect buffer\n", __func__);
             virtio_error(vdev, "Cannot map indirect buffer");
             goto done;
         }
@@ -1769,6 +1801,7 @@ static void *virtqueue_split_pop(VirtQueue *vq, size_t sz)
                                         desc.addr, desc.len);
         } else {
             if (in_num) {
+                QEMU_DBG(debug, "%s: Incorrect order for descriptors\n", __func__);
                 virtio_error(vdev, "Incorrect order for descriptors");
                 goto err_undo_map;
             }
@@ -1777,11 +1810,13 @@ static void *virtqueue_split_pop(VirtQueue *vq, size_t sz)
                                         desc.addr, desc.len);
         }
         if (!map_ok) {
+            QEMU_DBG(debug, "%s: virtqueue_map_desc() returns error\n", __func__);
             goto err_undo_map;
         }
 
         /* If we've got too many, that implies a descriptor loop. */
         if (++elem_entries > max) {
+            QEMU_DBG(debug, "%s: Looped descriptor\n", __func__);
             virtio_error(vdev, "Looped descriptor");
             goto err_undo_map;
         }
@@ -1790,6 +1825,7 @@ static void *virtqueue_split_pop(VirtQueue *vq, size_t sz)
     } while (rc == VIRTQUEUE_READ_DESC_MORE);
 
     if (rc == VIRTQUEUE_READ_DESC_ERROR) {
+        QEMU_DBG(debug, "%s: virtqueue_split_read_next_desc() returns error\n", __func__);
         goto err_undo_map;
     }
 
@@ -1978,7 +2014,10 @@ err_undo_map:
 
 void *virtqueue_pop(VirtQueue *vq, size_t sz)
 {
+    bool debug = qemu_dbg_matched_name(vq->vdev->name);
+
     if (virtio_device_disabled(vq->vdev)) {
+        QEMU_DBG(debug, "%s: virtio_device_disabled()\n", __func__);
         return NULL;
     }
 
@@ -2464,6 +2503,9 @@ static void virtio_queue_notify_vq(VirtQueue *vq)
 void virtio_queue_notify(VirtIODevice *vdev, int n)
 {
     VirtQueue *vq = &vdev->vq[n];
+    bool debug = qemu_dbg_matched_name(vdev->name);
+
+    QEMU_DBG(debug, "%s: n=%d\n", __func__, n);
 
     if (unlikely(!vq->vring.desc || vdev->broken)) {
         return;

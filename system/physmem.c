@@ -69,6 +69,7 @@
 #include "system/ram_addr.h"
 
 #include "qemu/pmem.h"
+#include "qemu/debug.h"
 
 #include "qapi/qapi-types-migration.h"
 #include "migration/blocker.h"
@@ -81,6 +82,7 @@
 #include "qemu/mmap-alloc.h"
 #endif
 
+#include "qemu/debug.h"
 #include "monitor/monitor.h"
 
 #ifdef CONFIG_LIBDAXCTL
@@ -180,6 +182,8 @@ struct DirtyBitmapSnapshot {
     ram_addr_t end;
     unsigned long dirty[];
 };
+
+bool global_track_memory = false;
 
 static void phys_map_node_reserve(PhysPageMap *map, unsigned nodes)
 {
@@ -3023,10 +3027,14 @@ static MemTxResult flatview_write(FlatView *fv, hwaddr addr, MemTxAttrs attrs,
     hwaddr l;
     hwaddr mr_addr;
     MemoryRegion *mr;
+    bool debug = (addr >= 0x8000203000 && addr < 0x8000204000);
 
     l = len;
     mr = flatview_translate(fv, addr, &mr_addr, &l, true, attrs);
+    QEMU_DBG(debug, "%s: addr=0x%lx, mr=[%s]\n",
+             __func__, addr, mr->name ? mr->name : "unknown");
     if (!flatview_access_allowed(mr, attrs, addr, len)) {
+        QEMU_DBG(debug, "%s: mr isn't accessible\n", __func__);
         return MEMTX_ACCESS_ERROR;
     }
     return flatview_write_continue(fv, addr, attrs, buf, len,
@@ -3621,11 +3629,19 @@ static inline MemoryRegion *address_space_translate_cached(
     MemoryRegion *mr;
     IOMMUMemoryRegion *iommu_mr;
     AddressSpace *target_as;
+    bool debug = global_track_memory;
+
+    QEMU_DBG(debug, "%s: cache@0x%lx, addr=0x%lx, is_write=%s\n",
+             __func__, (unsigned long)cache, addr, is_write ? "yes" : "no");
 
     assert(!cache->ptr);
     *xlat = addr + cache->xlat;
 
     mr = cache->mrs.mr;
+    QEMU_DBG(debug, "%s: cache->xlat=0x%lx, mr->alias=0x%lx, mr->is_iommu=%s\n",
+             __func__, cache->xlat, (unsigned long)(mr->alias),
+             mr->is_iommu ? "yes" : "no");
+ 
     iommu_mr = memory_region_get_iommu(mr);
     if (!iommu_mr) {
         /* MMIO region.  */

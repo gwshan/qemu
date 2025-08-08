@@ -32,6 +32,7 @@
 #include "qemu/units.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
+#include "qemu/debug.h"
 #include "trace.h"
 
 #include "standard-headers/linux/virtio_ids.h"
@@ -1004,17 +1005,27 @@ static void virtio_iommu_handle_command(VirtIODevice *vdev, VirtQueue *vq)
     struct iovec *iov;
     void *buf = NULL;
     size_t sz;
+    bool debug = qemu_dbg_matched_name(vdev->name);
+
+    QEMU_DBG(debug, "\n");
+    QEMU_DBG(debug, "=======================================================\n");
+    QEMU_DBG(debug, "%s: vdev=0x%lx, vq=0x%lx\n",
+             __func__, (unsigned long)vdev, (unsigned long)vq);
+    QEMU_DBG(debug, "    VIRTIO_F_RING_PACKED             %s\n",
+             virtio_vdev_has_feature(vdev, VIRTIO_F_RING_PACKED) ? "yes" : "no");
 
     for (;;) {
         size_t output_size = sizeof(tail);
 
         elem = virtqueue_pop(vq, sizeof(VirtQueueElement));
         if (!elem) {
+            QEMU_DBG(debug, "%s: No VirtQueueElement from virtqueue_pop()\n", __func__);
             return;
         }
 
         if (iov_size(elem->in_sg, elem->in_num) < sizeof(tail) ||
             iov_size(elem->out_sg, elem->out_num) < sizeof(head)) {
+            QEMU_DBG(debug, "%s: bad head/tail size\n", __func__);
             virtio_error(vdev, "virtio-iommu bad head/tail size");
             virtqueue_detach_element(vq, elem, 0);
             g_free(elem);
@@ -1025,6 +1036,7 @@ static void virtio_iommu_handle_command(VirtIODevice *vdev, VirtQueue *vq)
         iov = elem->out_sg;
         sz = iov_to_buf(iov, iov_cnt, 0, &head, sizeof(head));
         if (unlikely(sz != sizeof(head))) {
+            QEMU_DBG(debug, "%s: Unexpected size\n", __func__);
             qemu_log_mask(LOG_GUEST_ERROR,
                           "%s: read %zu bytes from command head"
                           "but expected %zu\n", __func__, sz, sizeof(head));
@@ -1032,6 +1044,7 @@ static void virtio_iommu_handle_command(VirtIODevice *vdev, VirtQueue *vq)
             goto out;
         }
         qemu_rec_mutex_lock(&s->mutex);
+        QEMU_DBG(debug, "%s: head.type=%d\n", __func__, head.type);
         switch (head.type) {
         case VIRTIO_IOMMU_T_ATTACH:
             tail.status = virtio_iommu_handle_attach(s, iov, iov_cnt);
@@ -1048,6 +1061,8 @@ static void virtio_iommu_handle_command(VirtIODevice *vdev, VirtQueue *vq)
         case VIRTIO_IOMMU_T_PROBE:
         {
             struct virtio_iommu_req_tail *ptail;
+
+            QEMU_DBG(debug, "%s: VIRTIO_IOMMU_T_PROBE request\n", __func__);
 
             output_size = s->config.probe_size + sizeof(tail);
             buf = g_malloc0(output_size);

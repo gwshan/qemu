@@ -39,6 +39,7 @@
 #include "hw/virtio/virtio-bus.h"
 #include "qapi/visitor.h"
 #include "system/replay.h"
+#include "qemu/debug.h"
 #include "trace.h"
 
 #define VIRTIO_PCI_REGION_SIZE(dev)     VIRTIO_PCI_CONFIG_OFF(msix_present(dev))
@@ -1574,6 +1575,7 @@ static void virtio_pci_common_write(void *opaque, hwaddr addr,
     VirtIOPCIProxy *proxy = opaque;
     VirtIODevice *vdev = virtio_bus_get_device(&proxy->bus);
     uint16_t vector;
+    bool debug = qemu_dbg_matched_name(vdev->name);
 
     if (vdev == NULL) {
         return;
@@ -1649,6 +1651,14 @@ static void virtio_pci_common_write(void *opaque, hwaddr addr,
         break;
     case VIRTIO_PCI_COMMON_Q_ENABLE:
         if (val == 1) {
+            QEMU_DBG(debug, "%s: queue=%d, num=%d, desc=0x%016lx, avail=0x%016lx, used=0x%016lx\n",
+                     __func__, vdev->queue_sel, proxy->vqs[vdev->queue_sel].num,
+                     ((uint64_t)proxy->vqs[vdev->queue_sel].desc[1]) << 32 |
+                     proxy->vqs[vdev->queue_sel].desc[0],
+                     ((uint64_t)proxy->vqs[vdev->queue_sel].avail[1]) << 32 |
+                     proxy->vqs[vdev->queue_sel].avail[0],
+                     ((uint64_t)proxy->vqs[vdev->queue_sel].used[1]) << 32 |
+                     proxy->vqs[vdev->queue_sel].used[0]);
             virtio_queue_set_num(vdev, vdev->queue_sel,
                                  proxy->vqs[vdev->queue_sel].num);
             virtio_queue_set_rings(vdev, vdev->queue_sel,
