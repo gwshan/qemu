@@ -33,6 +33,7 @@
 #include "system/dma.h"
 #include "system/runstate.h"
 #include "virtio-qmp.h"
+#include "qemu/debug.h"
 
 #include "standard-headers/linux/virtio_ids.h"
 #include "standard-headers/linux/vhost_types.h"
@@ -2474,6 +2475,9 @@ static void virtio_queue_notify_vq(VirtQueue *vq)
 void virtio_queue_notify(VirtIODevice *vdev, int n)
 {
     VirtQueue *vq = &vdev->vq[n];
+    bool debug = qemu_dbg_matched_name(vdev->name);
+
+    QEMU_DBG(debug, "%s: n=%d\n", __func__, n);
 
     if (unlikely(!vq->vring.desc || vdev->broken)) {
         return;
