@@ -3160,8 +3160,15 @@ void pci_setup_iommu(PCIBus *bus, const PCIIOMMUOps *ops, void *opaque)
     assert(ops);
     assert(ops->get_address_space);
 
-    bus->iommu_ops = ops;
-    bus->iommu_opaque = opaque;
+    /*
+     * The IOMMU operations may have been set by the platform, which shouldn't be
+     * overrided by that provided by virtio-iommu. Otherwise, the DMA operations
+     * can't be complted for the confidential guest.
+     */
+    if (!bus->iommu_ops) {
+        bus->iommu_ops = ops;
+        bus->iommu_opaque = opaque;
+    }
 }
 
 static void pci_dev_get_w64(PCIBus *b, PCIDevice *dev, void *opaque)
