@@ -23,6 +23,7 @@
 #include "qapi/error.h"
 #include "qemu/module.h"
 #include "qom/object.h"
+#include "qemu/debug.h"
 
 typedef struct VirtIONetPCI VirtIONetPCI;
 
@@ -51,6 +52,9 @@ static void virtio_net_pci_realize(VirtIOPCIProxy *vpci_dev, Error **errp)
     VirtIONetPCI *dev = VIRTIO_NET_PCI(vpci_dev);
     DeviceState *vdev = DEVICE(&dev->vdev);
     VirtIONet *net = VIRTIO_NET(vdev);
+    bool debug = qemu_dbg_target_object(OBJECT(vpci_dev));
+
+    qemu_dbg(debug, "=====> %s\n", __func__);
 
     if (vpci_dev->nvectors == DEV_NVECTORS_UNSPECIFIED) {
         vpci_dev->nvectors = 2 * MAX(net->nic_conf.peers.queues, 1)

@@ -26,6 +26,7 @@
 #include "qemu/module.h"
 #include "hw/pci/pci_bus.h"
 #include "migration/vmstate.h"
+#include "qemu/debug.h"
 #include "trace.h"
 
 /* debug PCI */
@@ -99,7 +100,10 @@ void pci_host_config_write_common(PCIDevice *pci_dev, uint32_t addr,
 uint32_t pci_host_config_read_common(PCIDevice *pci_dev, uint32_t addr,
                                      uint32_t limit, uint32_t len)
 {
+    bool debug = qemu_dbg_target_object(OBJECT(pci_dev));
     uint32_t ret;
+
+    qemu_dbg(debug, "%s: addr=0x%x, limit=0x%x, len=0x%x\n", __func__, addr, limit, len);
 
     pci_adjust_config_limit(pci_get_bus(pci_dev), &limit);
     if (limit <= addr) {

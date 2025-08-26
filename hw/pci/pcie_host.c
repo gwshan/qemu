@@ -23,6 +23,7 @@
 #include "hw/pci/pci_device.h"
 #include "hw/pci/pcie_host.h"
 #include "qemu/module.h"
+#include "qemu/debug.h"
 
 /* a helper function to get a PCIDevice for a given mmconfig address */
 static inline PCIDevice *pcie_dev_find_by_mmcfg_addr(PCIBus *s,
@@ -58,10 +59,16 @@ static uint64_t pcie_mmcfg_data_read(void *opaque,
     PCIDevice *pci_dev = pcie_dev_find_by_mmcfg_addr(s, mmcfg_addr);
     uint32_t addr;
     uint32_t limit;
+    bool debug;
 
     if (!pci_dev) {
         return ~0x0;
     }
+
+    debug = qemu_dbg_target_object(OBJECT(pci_dev));
+    qemu_dbg(debug, "%s: opaque=0x%lx, mmcfg_addr=0x%lx, len=0x%x\n",
+             __func__, (unsigned long)opaque, mmcfg_addr, len);
+
     addr = PCIE_MMCFG_CONFOFFSET(mmcfg_addr);
     limit = pci_config_size(pci_dev);
     return pci_host_config_read_common(pci_dev, addr, limit, len);

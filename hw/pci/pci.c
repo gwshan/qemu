@@ -54,6 +54,7 @@
 
 #include "hw/xen/xen.h"
 #include "hw/i386/kvm/xen_evtchn.h"
+#include "qemu/debug.h"
 
 bool pci_available = true;
 
@@ -2221,6 +2222,9 @@ static void pci_qdev_realize(DeviceState *qdev, Error **errp)
     Error *local_err = NULL;
     bool is_default_rom;
     uint16_t class_id;
+    bool debug = qemu_dbg_target_object(OBJECT(qdev));
+
+    qemu_dbg(debug, "=====> %s\n", __func__);
 
     /*
      * capped by systemd (see: udev-builtin-net_id.c)

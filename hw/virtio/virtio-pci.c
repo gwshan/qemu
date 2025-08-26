@@ -40,6 +40,7 @@
 #include "hw/virtio/virtio-bus.h"
 #include "qapi/visitor.h"
 #include "system/replay.h"
+#include "qemu/debug.h"
 #include "trace.h"
 
 #define VIRTIO_PCI_REGION_SIZE(dev)     VIRTIO_PCI_CONFIG_OFF(msix_present(dev))
@@ -796,6 +797,9 @@ static uint32_t virtio_read_config(PCIDevice *pci_dev,
 {
     VirtIOPCIProxy *proxy = VIRTIO_PCI(pci_dev);
     struct virtio_pci_cfg_cap *cfg;
+    bool debug = qemu_dbg_target_object(OBJECT(pci_dev));
+
+    qemu_dbg(debug, "%s: address=0x%x, len=0x%x\n", __func__, address, len);
 
     if (proxy->config_cap &&
         ranges_overlap(address, len, proxy->config_cap + offsetof(struct virtio_pci_cfg_cap,
@@ -2153,6 +2157,9 @@ static void virtio_pci_realize(PCIDevice *pci_dev, Error **errp)
     VirtioPCIClass *k = VIRTIO_PCI_GET_CLASS(pci_dev);
     bool pcie_port = pci_bus_is_express(pci_get_bus(pci_dev)) &&
                      !pci_bus_is_root(pci_get_bus(pci_dev));
+    bool debug = qemu_dbg_target_object(OBJECT(pci_dev));
+
+    qemu_dbg(debug, "=====> %s\n", __func__);
 
     /* fd-based ioevents can't be synchronized in record/replay */
     if (replay_mode != REPLAY_MODE_NONE) {
