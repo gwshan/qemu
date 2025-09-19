@@ -230,6 +230,9 @@ static int vfio_legacy_dma_map(const VFIOContainerBase *bcontainer, hwaddr iova,
      * again.  This shouldn't be necessary, but we sometimes see it in
      * the VGA ROM space.
      */
+    fprintf(stdout, "===> %s: iova=0x%lx, size=0x%lx, vaddr=0x%lx, mr=[%s]\n",
+            __func__, iova, size, (unsigned long)vaddr,
+            mr->name ? mr->name : "unknown");
     if (ioctl(container->fd, VFIO_IOMMU_MAP_DMA, &map) == 0 ||
         (errno == EBUSY &&
          vfio_legacy_dma_unmap(bcontainer, iova, size, NULL, false) == 0 &&
