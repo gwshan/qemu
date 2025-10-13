@@ -46,6 +46,8 @@ static int kvm_its_send_msi(GICv3ITSState *s, uint32_t value, uint16_t devid)
 {
     struct kvm_msi msi;
 
+    fprintf(stdout, "%s: value=0x%08x, devid=0x%04x\n", __func__, value, devid);
+
     if (unlikely(!s->translater_gpa_known)) {
         MemoryRegion *mr = &s->iomem_its_translation;
         MemoryRegionSection mrs;
