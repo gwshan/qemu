@@ -1851,6 +1851,17 @@ void virt_machine_done(Notifier *notifier, void *data)
     if (vms->cxl_devices_state.is_enabled) {
         cxl_fmws_link_targets(&error_fatal);
     }
+
+    if (kvm_enabled() && kvm_arm_rme_vm_type(ms) &&
+        vms->iommu != VIRT_IOMMU_NONE) {
+        /*
+         * With RME we already use DMA remapping for all devices. At the moment
+         * we cannot add IOMMU remapping on top of it.
+         */
+        error_report("mach-virt: virtual IOMMU not yet supported with rme-guest\n");
+        exit(1);
+    }
+
     /*
      * If the user provided a dtb, we assume the dynamic sysbus nodes
      * already are integrated there. This corresponds to a use case where
