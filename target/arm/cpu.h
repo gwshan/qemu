@@ -1207,6 +1207,7 @@ struct ArchCPU {
     /* Override the default configuration, only for RME vCPUs */
     uint8_t num_bps;
     uint8_t num_wps;
+    int8_t num_pmu_ctrs;
 };
 
 typedef struct ARMCPUInfo {
@@ -2165,6 +2166,8 @@ FIELD(GPCBW, BWADDR, 0, 25)
 FIELD(MFAR, FPA, 12, 40)
 FIELD(MFAR, NSE, 62, 1)
 FIELD(MFAR, NS, 63, 1)
+
+FIELD(PMCR, N, 11, 5)
 
 /* If adding a feature bit which corresponds to a Linux ELF
  * HWCAP bit, remember to update the feature-bit-to-hwcap
