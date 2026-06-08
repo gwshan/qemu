@@ -15,6 +15,7 @@
 #include "migration/blocker.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
+#include "qemu/memalign.h"
 #include "qom/object_interfaces.h"
 #include "system/confidential-guest-support.h"
 #include "system/kvm.h"
@@ -29,15 +30,180 @@ struct RmeGuest {
     GSList *ram_regions;
 };
 
+typedef struct RmeAlignedSlab {
+    hwaddr aligned_start, aligned_end;
+    hwaddr end;
+    GList *region_list;
+} RmeAlignedSlab;
+
+
 OBJECT_DEFINE_SIMPLE_TYPE_WITH_INTERFACES(RmeGuest, rme_guest, RME_GUEST,
                                           CONFIDENTIAL_GUEST_SUPPORT,
                                           { TYPE_USER_CREATABLE }, { })
 
 static RmeGuest *rme_guest;
 
+static void rme_populate_slab(gpointer data, gpointer err)
+{
+    RmeAlignedSlab *slab = data;
+    hwaddr aligned_start = slab->aligned_start;
+    hwaddr aligned_end = slab->aligned_end;
+    unsigned long page_size = qemu_real_host_page_size();
+    size_t aligned_size = aligned_end - aligned_start;
+    struct kvm_arm_rmi_populate populate_args;
+    GList *list = slab->region_list;
+    Error **errp = err;
+    void *buffer;
+    int ret;
+
+    if (*errp) {
+        return;
+    }
+
+    ret = kvm_set_memory_attributes_private(aligned_start, aligned_size);
+    if (ret) {
+        error_setg_errno(errp, -ret, "RME: failed to configure initial"
+                         "private guest memory");
+        return;
+    }
+
+    /* Allocate page-aligned memory */
+    buffer = qemu_memalign(page_size, aligned_size);
+    if (!buffer) {
+        return;
+    }
+
+    memset(buffer, 0, aligned_size);
+
+    for (GList *elem = g_list_first(list); elem; elem = g_list_next(elem)) {
+        RomLoaderNotifyData *region = elem->data;
+        hwaddr offset = region->addr - aligned_start;
+        memcpy(buffer + offset, region->data, region->len);
+    }
+
+    g_list_free_full(g_steal_pointer(&slab->region_list), g_free);
+
+    populate_args = (struct kvm_arm_rmi_populate) {
+        .base = aligned_start,
+        .size = aligned_size,
+        .source_uaddr = (uintptr_t)buffer,
+        .flags = KVM_ARM_RMI_POPULATE_FLAGS_MEASURE,
+    };
+
+    while (populate_args.size > 0) {
+        ret = kvm_vm_ioctl(kvm_state, KVM_ARM_RMI_POPULATE, &populate_args, 0);
+        if (ret) {
+            error_setg_errno(errp, -ret,
+                "failed to populate realm [0x%"HWADDR_PRIx", 0x%"HWADDR_PRIx")",
+                aligned_start, aligned_end);
+            break;
+        }
+    }
+
+    qemu_vfree(buffer);
+}
+
+static RmeAlignedSlab *
+rme_init_aligned_slab(RomLoaderNotifyData *region)
+{
+    RmeAlignedSlab *slab = g_malloc0(sizeof(RmeAlignedSlab));
+    unsigned long page_size = qemu_real_host_page_size();
+    hwaddr base = region->addr;
+    hwaddr size = region->len;
+
+    slab->aligned_start = QEMU_ALIGN_DOWN(base, page_size);
+    slab->aligned_end = QEMU_ALIGN_UP(base + size, page_size);
+    slab->end = base + size;
+
+    slab->region_list = g_list_append(slab->region_list, region);
+
+    return slab;
+}
+
+static void rme_insert_in_aligned_slab(RmeAlignedSlab *slab,
+                                       RomLoaderNotifyData *region)
+{
+    slab->end = region->addr + region->len;
+    slab->region_list = g_list_append(slab->region_list, region);
+}
+
+static GList *rme_swizzle_memory_regions(void)
+{
+    GSList *tmp, *node = g_steal_pointer(&rme_guest->ram_regions);
+    GList *slab_list = NULL;
+    RomLoaderNotifyData *region;
+    RmeAlignedSlab *slab;
+
+    /* Memory regions, i.e @node, appear in ascending order */
+    while (node) {
+        region = (RomLoaderNotifyData *)node->data;
+        tmp = node;
+        node = g_slist_remove_link(node, tmp);
+        g_slist_free(tmp);
+
+        /*
+         * The slab list is empty, so simply create a slab based on the first
+         * entry we got from @rme_guest->ram_regions.  Since ->ram_regions are
+         * sorted, we are guaranteed to start with the lowest region.
+         */
+        if (!slab_list) {
+            slab = rme_init_aligned_slab(region);
+            slab_list = g_list_append(slab_list, slab);
+            continue;
+        }
+
+        /*
+         * Slabs and ->ram_regions are sorted, so we know the last slab in the
+         * list is always the current one.
+         */
+        slab = g_list_last(slab_list)->data;
+
+        /*
+         * TODO: Add support for memory region that straddle two pages if we
+         * think it is important.  Doing so may lead to large memory areas that
+         * may not be accommodated easily by qemu_memalign() in
+         * rme_populate_slab().
+         */
+        if (region->addr < slab->aligned_end &&
+            region->addr + region->len > slab->aligned_end) {
+            error_report("Memory region [0x%"HWADDR_PRIx", 0x%lx]"
+                         "straddles two pages",
+                         region->addr, region->len);
+            g_free(region);
+            continue;
+        }
+
+        /* Add the memory region in the current slab if it fits */
+        if (region->addr >= slab->end &&
+            region->addr + region->len <= slab->aligned_end) {
+            rme_insert_in_aligned_slab(slab, region);
+            continue;
+        }
+
+        /*
+         * Allocate a new page aligned slab if the region can't be fitted
+         * in the current slab.
+         */
+        slab = rme_init_aligned_slab(region);
+        slab_list = g_list_append(slab_list, slab);
+    }
+
+    return slab_list;
+}
+
 static void rme_vm_state_change(void *opaque, bool running, RunState state)
 {
+    Error *errp = NULL;
+    GList *slab_list;
+
     if (!running) {
+        return;
+    }
+
+    slab_list = rme_swizzle_memory_regions();
+    g_list_foreach(slab_list, rme_populate_slab, &errp);
+    g_list_free_full(slab_list, g_free);
+    if (errp) {
         return;
     }
 
@@ -55,6 +221,7 @@ static gint rme_compare_ram_regions(gconstpointer a, gconstpointer b)
 
 static void rme_rom_load_notify(Notifier *notifier, void *data)
 {
+    /* Each memory region is free'ed in rme_populate_slab() */
     RomLoaderNotifyData *region = g_memdup2(data,
                                             sizeof(struct RomLoaderNotifyData));
 
