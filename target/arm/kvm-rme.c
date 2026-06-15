@@ -81,6 +81,7 @@ struct RmeGuest {
 
     uint8_t ipa_bits;
     size_t num_cpus;
+    bool configured;
 
     RealmDmaRegion *dma_region;
     QLIST_HEAD(, RealmRamDiscardListener) ram_discard_list;
@@ -530,12 +531,14 @@ static void rme_vm_state_change(void *opaque, bool running, RunState state)
 {
     Error *err = NULL;
 
-    if (!running) {
+    if (!running || rme_guest->configured) {
         return;
     }
 
     if (rme_create_realm(&err)) {
         error_propagate_prepend(&error_fatal, err, "RME: ");
+    } else {
+        rme_guest->configured = true;
     }
 }
 
