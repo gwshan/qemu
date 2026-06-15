@@ -1300,6 +1300,7 @@ static void rom_reset(void *unused)
         trace_loader_write_rom(rom->name, rom->addr, rom->datasize, rom->isrom);
 
         notify = (RomLoaderNotifyData) {
+            .name = rom->name,
             .as = rom->as,
             .mr = rom->mr,
             .addr = rom->addr,
