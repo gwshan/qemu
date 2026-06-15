@@ -119,3 +119,13 @@ char *kvm_print_register_name(uint64_t regidx)
 {
     g_assert_not_reached();
 }
+
+int kvm_arm_rme_init(MachineState *ms)
+{
+    g_assert_not_reached();
+}
+
+int kvm_arm_rme_vm_type(MachineState *ms)
+{
+    g_assert_not_reached();
+}
