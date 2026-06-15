@@ -343,10 +343,13 @@ ssize_t rom_add_vga(const char *file);
 ssize_t rom_add_option(const char *file, int32_t bootindex);
 
 typedef struct RomLoaderNotifyData {
+    AddressSpace *as;
+    MemoryRegion *mr;
     /* Address of the blob in guest memory */
     hwaddr addr;
     /* Length of the blob */
     size_t len;
+    void *data;
 } RomLoaderNotifyData;
 
 /**
