@@ -1188,6 +1188,22 @@
             '*node-affinity': ['uint16'] } }
 
 ##
+# @RmeGuestProperties:
+#
+# Properties for rme-guest objects.
+#
+# @measurement-log: Enable a measurement log for the Realm.  All
+#     events that contribute to the Realm Initial Measurement (RIM)
+#     are added to a log in TCG TPM2 format, which is itself loaded
+#     into Realm memory (unmeasured) and can then be read by a
+#     verifier to reconstruct the RIM.
+#
+# Since: 11.1
+##
+{ 'struct': 'RmeGuestProperties',
+  'data': { '*measurement-log': 'bool'} }
+
+##
 # @ObjectType:
 #
 # Features:
