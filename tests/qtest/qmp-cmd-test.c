@@ -54,6 +54,8 @@ static int query_error_class(const char *cmd)
         { "xen-event-list", ERROR_CLASS_GENERIC_ERROR },
         /* requires firmware with memory buffer logging support */
         { "query-firmware-log", ERROR_CLASS_GENERIC_ERROR },
+        /* Only valid within RME host */
+        { "query-rme-guest-capabilities", ERROR_CLASS_GENERIC_ERROR },
         { NULL, -1 }
     };
     int i;
