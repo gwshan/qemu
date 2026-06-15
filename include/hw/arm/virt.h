@@ -208,6 +208,7 @@ struct VirtMachineState {
     MemoryRegion *secure_sysmem;
     bool pci_preserve_config;
     char *pflash[2];
+    Object *event_log;
 };
 
 #define VIRT_ECAM_ID(high) (high ? VIRT_HIGH_PCIE_ECAM : VIRT_PCIE_ECAM)
