@@ -1033,7 +1033,13 @@ bool write_list_to_kvmstate(ARMCPU *cpu, int level)
         default:
             g_assert_not_reached();
         }
-        if (ret) {
+
+        /*
+         * FIXME: Don't handle the error if the vCPU belongs to a Realm
+         * since the very limited set of registers are allowed to set in
+         * such circumstance.
+         */
+        if (!cpu->kvm_rme && ret) {
             gchar *reg_str = kvm_print_register_name(regidx);
 
             /* We might fail for "unknown register" and also for
@@ -2007,6 +2013,11 @@ int kvm_arch_init_vcpu(CPUState *cs)
         cpu->kvm_init_features[0] |= 1 << KVM_ARM_VCPU_HAS_EL2;
     }
 
+    ret = kvm_arm_rme_vcpu_init(cs);
+    if (ret) {
+        return ret;
+    }
+
     /* Do KVM_ARM_VCPU_INIT ioctl */
     ret = kvm_arm_vcpu_init(cpu);
     if (ret) {
@@ -2161,6 +2172,37 @@ static int kvm_arch_put_sve(CPUState *cs, uint32_t vq, bool have_ffr)
     return 0;
 }
 
+static int kvm_arm_rme_put_core_regs(CPUState *cs, Error **errp)
+{
+    int i, ret;
+    ARMCPU *cpu = ARM_CPU(cs);
+    CPUARMState *env = &cpu->env;
+
+    /*
+     * The RME ABI only allows us to set 30 GPRs and the PC.
+     *
+     * For PSCI, X0-X6 are used.
+     * For host call, X0-X30 are used.
+     * For emulated MMIO, X0 is used.
+     *
+     * The PC can only be set before the realm is activiated.
+     */
+    for (i = 0; i <= 30; i++) {
+        ret = kvm_set_one_reg(cs, AARCH64_CORE_REG(regs.regs[i]),
+                              &env->xregs[i]);
+        if (ret) {
+            return ret;
+        }
+    }
+
+    ret = kvm_set_one_reg(cs, AARCH64_CORE_REG(regs.pc), &env->pc);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
 static int kvm_arm_put_core_regs(CPUState *cs, KvmPutState level, Error **errp)
 {
     uint64_t val;
@@ -2170,6 +2212,10 @@ static int kvm_arm_put_core_regs(CPUState *cs, KvmPutState level, Error **errp)
 
     ARMCPU *cpu = ARM_CPU(cs);
     CPUARMState *env = &cpu->env;
+
+    if (cpu->kvm_rme) {
+        return kvm_arm_rme_put_core_regs(cs, errp);
+    }
 
     /* If we are in AArch32 mode then we need to copy the AArch32 regs to the
      * AArch64 registers before pushing them out to 64-bit KVM.
@@ -2359,6 +2405,23 @@ static int kvm_arch_get_sve(CPUState *cs, uint32_t vq, bool have_ffr)
     return 0;
 }
 
+static int kvm_arm_rme_get_core_regs(CPUState *cs, Error **errp)
+{
+    int i, ret;
+    ARMCPU *cpu = ARM_CPU(cs);
+    CPUARMState *env = &cpu->env;
+
+    for (i = 0; i <= 30; i++) {
+        ret = kvm_get_one_reg(cs, AARCH64_CORE_REG(regs.regs[i]),
+                              &env->xregs[i]);
+        if (ret) {
+            return ret;
+        }
+    }
+
+    return 0;
+}
+
 static int kvm_arm_get_core_regs(CPUState *cs, Error **errp)
 {
     uint64_t val;
@@ -2368,6 +2431,10 @@ static int kvm_arm_get_core_regs(CPUState *cs, Error **errp)
 
     ARMCPU *cpu = ARM_CPU(cs);
     CPUARMState *env = &cpu->env;
+
+    if (cpu->kvm_rme) {
+        return kvm_arm_rme_get_core_regs(cs, errp);
+    }
 
     for (i = 0; i < 31; i++) {
         ret = kvm_get_one_reg(cs, AARCH64_CORE_REG(regs.regs[i]),
