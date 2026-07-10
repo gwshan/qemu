@@ -693,20 +693,16 @@ struct kvm_enable_cap {
  * Bits[7-0] are reserved for the guest PA size shift (i.e, log2(PA_Size)).
  * For backward compatibility, value 0 implies the default IPA size, 40bits.
  */
-#define KVM_VM_TYPE_ARM_SHIFT		30
-#define KVM_VM_TYPE_ARM_MASK		(0x3ULL << KVM_VM_TYPE_ARM_SHIFT)
-#define KVM_VM_TYPE_ARM(_type)		\
-	(((_type) << KVM_VM_TYPE_ARM_SHIFT) & KVM_VM_TYPE_ARM_MASK)
-#define KVM_VM_TYPE_ARM_NORMAL		KVM_VM_TYPE_ARM(0)
-#define KVM_VM_TYPE_ARM_REALM		KVM_VM_TYPE_ARM(1)
-
 #define KVM_VM_TYPE_ARM_IPA_SIZE_MASK	0xffULL
 #define KVM_VM_TYPE_ARM_IPA_SIZE(x)		\
 	((x) & KVM_VM_TYPE_ARM_IPA_SIZE_MASK)
 
+#define KVM_VM_TYPE_ARM_NORMAL		0
+#define KVM_VM_TYPE_ARM_REALM		(1UL << 30)
 #define KVM_VM_TYPE_ARM_PROTECTED	(1UL << 31)
 #define KVM_VM_TYPE_ARM_MASK		(KVM_VM_TYPE_ARM_IPA_SIZE_MASK | \
-					 KVM_VM_TYPE_ARM_PROTECTED)
+					 KVM_VM_TYPE_ARM_PROTECTED | \
+					 KVM_VM_TYPE_ARM_REALM)
 
 /*
  * ioctls for /dev/kvm fds:
