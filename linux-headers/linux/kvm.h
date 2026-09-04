@@ -994,8 +994,10 @@ struct kvm_enable_cap {
 #define KVM_CAP_S390_VSIE_ESAMODE 248
 #define KVM_CAP_S390_HPAGE_2G 249
 #define KVM_CAP_PPC_COMPAT_CAPS 250
-#define KVM_CAP_GUEST_MEMFD_MEMORY_ATTRIBUTES 251
-#define KVM_CAP_ARM_RMI 252
+#define KVM_CAP_ARM_PMU_V3_STRICT 251
+#define KVM_CAP_GUEST_MEMFD_MEMORY_ATTRIBUTES 252
+
+#define KVM_CAP_ARM_RMI 253
 
 struct kvm_irq_routing_irqchip {
 	__u32 irqchip;
