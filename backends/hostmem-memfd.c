@@ -22,6 +22,8 @@
 #include "system/kvm.h"
 #include <linux/kvm.h>
 #include "qapi/qapi-type-infos-common.h"
+#include "hw/core/boards.h"
+#include "hw/core/qdev.h"
 
 OBJECT_DECLARE_SIMPLE_TYPE(HostMemoryBackendMemfd, MEMORY_BACKEND_MEMFD)
 
@@ -46,6 +48,7 @@ memfd_backend_memory_alloc(HostMemoryBackend *backend, Error **errp)
 {
     HostMemoryBackendMemfd *m = MEMORY_BACKEND_MEMFD(backend);
     g_autofree char *name = host_memory_backend_get_name(backend);
+    MachineState *machine = MACHINE(qdev_get_machine());
     int fd = cpr_find_fd(name, 0);
     uint32_t ram_flags;
 
@@ -58,7 +61,9 @@ memfd_backend_memory_alloc(HostMemoryBackend *backend, Error **errp)
         goto have_fd;
     }
 
-    if (m->guest_memfd == ON_OFF_AUTO_ON) {
+    if (m->guest_memfd == ON_OFF_AUTO_ON ||
+        (m->guest_memfd == ON_OFF_AUTO_AUTO &&
+         machine_require_guest_memfd_convert_in_place(machine))) {
         /*
          * NOTE: guest-memfd ignores seal=on/off because it always
          * implicitly seals the FD by definition.
@@ -73,6 +78,12 @@ memfd_backend_memory_alloc(HostMemoryBackend *backend, Error **errp)
 
         fd = kvm_create_guest_memfd(backend->size, errp);
     } else {
+        if (machine_require_guest_memfd_convert_in_place(machine)) {
+            error_setg(errp, "the current machine requires in-place conversion,"
+                             " which is not compatible with setting"
+                             " guest-memfd=off");
+            return false;
+        }
         fd = qemu_memfd_create(TYPE_MEMORY_BACKEND_MEMFD, backend->size,
                                m->hugetlb, m->hugetlbsize, m->seal ?
                                F_SEAL_GROW | F_SEAL_SHRINK | F_SEAL_SEAL : 0,
