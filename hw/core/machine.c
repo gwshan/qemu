@@ -1625,6 +1625,11 @@ void machine_run_board_init(MachineState *machine, const char *mem_path, Error *
     ERRP_GUARD();
     MachineClass *machine_class = MACHINE_GET_CLASS(machine);
 
+    fprintf(stdout, "=====> %s: ms->memdev=<%s>\n",
+            __func__, machine->memdev ? machine->memdev->mr.name : "None");
+    fprintf(stdout, "%s: numa_uses_legacy_mem()=%s\n",
+            __func__, numa_uses_legacy_mem() ? "yes" : "no");
+
     /* This checkpoint is required by replay to separate prior clock
        reading from the other reads, because timer polling functions query
        clock values from the log. */
