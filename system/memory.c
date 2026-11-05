@@ -2726,9 +2726,7 @@ MemoryRegionSection memory_region_find(MemoryRegion *mr,
     MemoryRegionSection ret;
     RCU_READ_LOCK_GUARD();
     ret = memory_region_find_rcu(mr, addr, size);
-    if (ret.mr) {
-        memory_region_ref(ret.mr);
-    }
+    memory_region_ref(ret.mr);
     return ret;
 }
 
