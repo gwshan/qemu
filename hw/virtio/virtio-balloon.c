@@ -425,11 +425,8 @@ static void virtio_balloon_handle_output(VirtIODevice *vdev, VirtQueue *vq)
 
             section = memory_region_find(get_system_memory(), pa,
                                          BALLOON_PAGE_SIZE);
-            if (!section.mr) {
-                trace_virtio_balloon_bad_addr(pa);
-                continue;
-            }
-            if (!memory_region_is_ram(section.mr) ||
+            if (!section.mr ||
+                !memory_region_is_ram(section.mr) ||
                 memory_region_is_rom(section.mr) ||
                 memory_region_is_romd(section.mr)) {
                 trace_virtio_balloon_bad_addr(pa);
