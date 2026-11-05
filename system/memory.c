@@ -2751,9 +2751,8 @@ void memory_region_section_free_copy(MemoryRegionSection *s)
     if (s->fv) {
         flatview_unref(s->fv);
     }
-    if (s->mr) {
-        memory_region_unref(s->mr);
-    }
+
+    memory_region_unref(s->mr);
     g_free(s);
 }
 
