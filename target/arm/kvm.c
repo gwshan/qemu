@@ -391,6 +391,14 @@ static void kvm_arm_get_host_cpu_features(ARMHostCPUFeatures *ahcf, Error **errp
         features |= 1ULL << ARM_FEATURE_PMU;
     }
 
+    if (kvm_check_extension(kvm_state, KVM_CAP_ARM_PSCI_0_2)) {
+        /*
+         * Versions >= v0.2 are backward compatible with v0.2
+         * omit the feature flag for v0.1 .
+         */
+        init.features[0] |= 1 << KVM_ARM_VCPU_PSCI_0_2;
+    }
+
     if (!kvm_arm_create_scratch_host_vcpu(fdarray, &init, errp)) {
         return;
     }
